@@ -14,6 +14,8 @@ Calendar, reminders, class timetable and long-term planning for [DeepSeek Harnes
 | **Long-term plan** | A goal broken into milestones with due dates and progress |
 | **One sentence** | Ask the model in chat (“明天下午三点组会，提前十分钟提醒”), or type into the panel's quick box without leaving the calendar |
 
+Step-by-step workflows are in [docs/usage.md](./docs/usage.md).
+
 Data lives in one document under `$DSH_HOME/storages/dsh-schedule-calendar/calendar.json`, shared across workspaces, and can be exported as ICS or a JSON backup.
 
 The interface ships in Chinese and English and follows the DSH page language.

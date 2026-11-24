@@ -14,6 +14,8 @@ English docs: [README.md](./README.md).
 - **长期规划**：一个目标拆成若干里程碑，每个里程碑带截止日和完成状态，自动算整体进度。
 - **一句话添加**：在对话框里说「明天下午三点组会，提前十分钟提醒」，或在日历页的快速输入框里直接写一句，不用离开页面。
 
+详细操作步骤见 [docs/usage.zh.md](./docs/usage.zh.md)。
+
 数据只存一份，在 `$DSH_HOME/storages/dsh-schedule-calendar/calendar.json`，跨工作区共享；可导出 ICS 日历文件或 JSON 备份。
 
 界面中英双语，跟随 DSH 的界面语言。
