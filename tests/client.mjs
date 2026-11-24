@@ -47,9 +47,11 @@ assert.equal(typeof row.factory, 'function')
 
 const module = row.factory(require)
 assert.equal(typeof module.apply, 'function', 'the factory must export apply')
-assert.deepEqual(module.inject, ['slots'], 'the factory must declare its inject list')
+assert.deepEqual(module.inject, ['slots', 'locale'], 'the factory must declare its inject list')
 
 const registrations = []
+let activeLocale = 'en'
+const localeListeners = new Set()
 const ctx = {
   slots: {
     inject(name, callback) {
@@ -59,6 +61,13 @@ const ctx = {
     register(spec, component) {
       registrations.push({ spec, component })
       return () => {}
+    },
+  },
+  locale: {
+    getLocale: () => ({ active: activeLocale }),
+    subscribe(listener) {
+      localeListeners.add(listener)
+      return () => localeListeners.delete(listener)
     },
   },
   effect(callback) {
@@ -82,6 +91,17 @@ const panel = registrations.find((entry) => entry.spec.name === 'sidebar.panelli
 assert.equal(panel.spec.id, 'dsh-schedule-calendar')
 assert.equal(typeof panel.spec.label, 'function', 'the sidebar label is resolved lazily for i18n')
 assert.equal(typeof panel.component, 'function')
+
+// The interface follows the locale SERVICE, not the DOM: the shell's html has no
+// lang and Electron reports the OS locale, which is how a Chinese desktop
+// rendered this panel in English.
+assert.equal(panel.spec.label(), 'Schedule', 'the label follows the active locale')
+activeLocale = 'zh-CN'
+for (const listener of localeListeners) listener()
+assert.equal(panel.spec.label(), '日程', 'a locale switch is adopted without a reload')
+activeLocale = 'en-US'
+for (const listener of localeListeners) listener()
+assert.equal(panel.spec.label(), 'Schedule', 'and switches back')
 
 const main = registrations.find((entry) => entry.spec.name === 'main')
 assert.equal(main.spec.key, 'dsh-schedule-calendar', 'the main panel key matches the sidebar id')

@@ -1,14 +1,14 @@
 /**
  * Browser half of dsh-schedule-calendar.
  *
- * Registers one left-sidebar panel and the main-area page it addresses. The
- * shell mounts this bundle lazily, so nothing here runs until the panel is
- * first used.
+ * Registers one left-sidebar panel, the main-area page it addresses, and the
+ * frame-wide reminder stack. The shell mounts this bundle lazily, so nothing
+ * here runs until the panel is first used.
  */
 
 import { CSS } from './css.js'
 import { CalendarIcon } from './Icon.js'
-import { t } from './i18n.js'
+import { setLanguage, t } from './i18n.js'
 import { NoticeHost } from './NoticeHost.js'
 import { CalendarPage } from './Page.js'
 
@@ -16,7 +16,13 @@ import { CalendarPage } from './Page.js'
 export const PANEL_ID = 'dsh-schedule-calendar'
 
 /** Cordis services awaited before {@link apply} runs. */
-export const inject = ['slots'] as const
+export const inject = ['slots', 'locale'] as const
+
+/** The locale service face this plugin reads. */
+interface LocaleService {
+  getLocale?(): { active?: string }
+  subscribe?(listener: () => void): () => void
+}
 
 /** Minimal shape of the browser context members used here. */
 interface ClientContext {
@@ -24,6 +30,7 @@ interface ClientContext {
     inject(name: string, callback: () => () => void): () => void
     register(spec: Record<string, unknown>, component: unknown): () => void
   }
+  locale?: LocaleService
   effect?(callback: () => (() => void) | void, label?: string): void
   get?(key: string): unknown
 }
@@ -39,12 +46,41 @@ function ensureStyles(): void {
 }
 
 /**
+ * Follow the DSH interface language.
+ *
+ * The shell's HTML carries no `lang` and Electron reports the OS locale, so a
+ * Chinese desktop still looked English from the DOM. The locale service is the
+ * only source that matches what the rest of DSH renders.
+ * @param ctx - browser context.
+ * @param disposers - cleanup sink for the subscription.
+ */
+function followLocale(ctx: ClientContext, disposers: Array<() => void>): void {
+  const locale = ctx.locale ?? (ctx.get?.('locale') as LocaleService | undefined)
+  if (locale?.getLocale === undefined) return
+  const sync = (): void => {
+    try {
+      const active = locale.getLocale?.()?.active
+      if (typeof active === 'string' && active !== '') setLanguage(active)
+    } catch {
+      /* a throwing service keeps the last known language */
+    }
+  }
+  sync()
+  if (typeof locale.subscribe === 'function') {
+    const stop = locale.subscribe(sync)
+    if (typeof stop === 'function') disposers.push(stop)
+  }
+}
+
+/**
  * Mount the browser half.
  * @param ctx - browser cords context.
  */
 export function apply(ctx: ClientContext): void {
   ensureStyles()
   const disposers: Array<() => void> = []
+
+  followLocale(ctx, disposers)
 
   disposers.push(
     ctx.slots.inject('sidebar.panellist', () =>

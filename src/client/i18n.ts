@@ -2,9 +2,11 @@
  * Interface copy in Chinese and English.
  *
  * Keys are the Chinese text, so a missing translation degrades to readable
- * Chinese instead of a raw identifier. The active language follows the DSH page
- * language (`<html lang>`), which the shell sets from the user's locale.
+ * Chinese instead of a raw identifier. The active language follows the DSH
+ * locale service, which is also what renders the rest of the app.
  */
+
+import { useSyncExternalStore } from 'react'
 
 /** Supported interface languages. */
 export type Lang = 'zh' | 'en'
@@ -206,17 +208,50 @@ const EN: Record<string, string> = {
 /** Current interface language. */
 let current: Lang = 'zh'
 
-/** Read the DSH page language once, at module load. */
+/** Components re-rendered when the DSH locale switches. */
+const listeners = new Set<() => void>()
+
+/**
+ * Last-resort language source.
+ *
+ * `document.documentElement.lang` and `navigator.language` are NOT the DSH
+ * language: the shell's HTML carries no lang and Electron reports the OS
+ * locale, so both said "en" on a Chinese desktop. {@link setLanguage} overwrites
+ * this from the locale service before anything renders; this only covers a
+ * composition without that service, and tests.
+ */
 function detect(): Lang {
   try {
-    const lang = document.documentElement.lang || navigator.language || 'zh'
-    return lang.toLowerCase().startsWith('en') ? 'en' : 'zh'
+    return normalize(document.documentElement.lang || navigator.language || 'zh')
   } catch {
     return 'zh'
   }
 }
 
+/** Map any locale tag onto a supported language. */
+function normalize(id: string): Lang {
+  return id.toLowerCase().startsWith('en') ? 'en' : 'zh'
+}
+
 current = detect()
+
+/**
+ * Adopt the DSH locale. Called by the client entry on mount and on every
+ * `locale/change`, so the panel follows a language switch without a reload.
+ * @param id - active locale id from the locale service.
+ */
+export function setLanguage(id: string): void {
+  const next = normalize(id)
+  if (next === current) return
+  current = next
+  for (const listener of [...listeners]) {
+    try {
+      listener()
+    } catch {
+      /* a broken subscriber must not block the switch */
+    }
+  }
+}
 
 /** The language in use. */
 export function language(): Lang {
@@ -235,12 +270,20 @@ export function t(zh: string, params?: Record<string, string | number>): string 
   return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in params ? String(params[key]) : match))
 }
 
+/** Subscribe to language changes; returns the unsubscribe. */
+export function subscribeLanguage(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
 /**
- * Build a translator bound to the active language.
- * Components call this once per render; DSH reloads the page on a language
- * change, so no subscription is needed.
+ * Translator bound to the active language, re-rendering the caller when DSH
+ * switches language.
  * @returns the bound translator.
  */
 export function useT(): typeof t {
+  useSyncExternalStore(subscribeLanguage, language, () => 'zh' as Lang)
   return t
 }
