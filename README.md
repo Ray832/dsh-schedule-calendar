@@ -22,8 +22,17 @@ The interface ships in Chinese and English and follows the DSH page language.
 
 ## Install
 
+Not on npm yet, so install straight from this repository:
+
 ```bash
-dsh plugin --profile <name> add dsh-schedule-calendar
+# the tagged release
+dsh plugin --profile <name> add github:Ray832/dsh-schedule-calendar#v1.0.0
+
+# or the packed tarball from the release page
+dsh plugin --profile <name> add https://github.com/Ray832/dsh-schedule-calendar/releases/download/v1.0.0/dsh-schedule-calendar-1.0.0.tgz
+
+# or a local checkout, for development
+dsh plugin --profile <name> add link:/path/to/dsh-schedule-calendar
 ```
 
 Or from the GUI: **Settings → Plugins → install**, then enable the bundle.

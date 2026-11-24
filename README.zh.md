@@ -22,8 +22,17 @@ English docs: [README.md](./README.md).
 
 ## 安装
 
+目前还没发到 npm，直接从仓库装：
+
 ```bash
-dsh plugin --profile <profile> add dsh-schedule-calendar
+# 打好的 v1.0.0 标签
+dsh plugin --profile <profile> add github:Ray832/dsh-schedule-calendar#v1.0.0
+
+# 或者 Release 页里的打包文件
+dsh plugin --profile <profile> add https://github.com/Ray832/dsh-schedule-calendar/releases/download/v1.0.0/dsh-schedule-calendar-1.0.0.tgz
+
+# 或者本地目录，用于开发
+dsh plugin --profile <profile> add link:/path/to/dsh-schedule-calendar
 ```
 
 也可以在界面里：**设置 → 插件 → 安装**，然后启用。
