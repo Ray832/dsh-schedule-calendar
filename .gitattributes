@@ -1,0 +1,7 @@
+# Normalize line endings for everyone; the plugin is built and published from any OS.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.tgz binary

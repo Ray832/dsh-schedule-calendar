@@ -1,0 +1,64 @@
+{
+  "name": "dsh-schedule-calendar",
+  "version": "0.0.1",
+  "description": "Calendar, reminders, class timetable and long-term planning for DeepSeek Harness — with one-sentence scheduling through the DSH model.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "calendar",
+    "schedule",
+    "timetable",
+    "reminder"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "icon": "icon.svg",
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.1-rc.3 <0.3.0",
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
+    "esbuild": "^0.25.0",
+    "typescript": "~5.7.2"
+  },
+  "scripts": {
+    "build": "npm run build:host && npm run build:client",
+    "build:host": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node20 --packages=external --outfile=lib/index.js --sourcemap",
+    "build:client": "esbuild src/client/index.tsx --bundle --format=cjs --platform=browser --target=es2022 --jsx=automatic --charset=utf8 --legal-comments=none --external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@deepseek-ai/cordis --external:@deepseek-ai/dsh-client-store --external:@deepseek-ai/dsh-client-ui-slots --external:@deepseek-ai/dsh-client-ui-primitives --outfile=lib/client.cjs && node scripts/wrap.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/smoke.mjs && node tests/notify.mjs && node tests/repeat.mjs && node tests/client.mjs && node tests/i18n.mjs"
+  },
+  "license": "MIT"
+}

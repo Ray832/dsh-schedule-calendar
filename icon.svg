@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Schedule calendar">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#4D6BFE"/>
+  <rect x="28" y="36" width="72" height="66" rx="10" fill="#FFFFFF"/>
+  <rect x="28" y="36" width="72" height="16" rx="8" fill="#DCE3FF"/>
+  <path d="M45 26v16M83 26v16" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <rect x="42" y="64" width="14" height="14" rx="4" fill="#4D6BFE"/>
+  <rect x="64" y="64" width="14" height="14" rx="4" fill="#AEBDFF"/>
+  <rect x="42" y="82" width="14" height="14" rx="4" fill="#AEBDFF"/>
+  <rect x="64" y="82" width="14" height="14" rx="4" fill="#AEBDFF"/>
+</svg>

@@ -1,0 +1,11 @@
+# Bundle patch layer for dsh-schedule-calendar.
+#
+# Installing this package appends it to `dsh.profile.bundles`, and this layer
+# inserts the plugin row itself, so no profile file needs a manual mount line.
+#
+#   Settings -> Plugins -> install from a local path, or
+#   dsh plugin --profile <name> add dsh-schedule-calendar
+#
+- insert:
+    - id: schedule-calendar
+      name: 'dsh-schedule-calendar'
