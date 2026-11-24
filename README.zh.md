@@ -34,6 +34,8 @@ dsh plugin --profile <profile> add dsh-schedule-calendar
 
 判断有没有真的挂上：启动后 `<DSH_HOME>/storages/dsh-schedule-calendar/` 这个目录会被创建，没有这个目录就说明条目没加载。
 
+`npm run doctor` 会把这条链路上的每一步都查一遍，逐行打印 PASS/FAIL：profile 清单、插件列表、能否解析、构建是否比源码新、宿主端有没有挂载过。
+
 ### 关于对话里的工具
 
 `calendar_add` / `calendar_list` 是尽力注册：如果当前预设没有向宿主级插件开放工具注册表，这两个工具就静默跳过，日历页的快速输入框照常工作，功能不受影响。

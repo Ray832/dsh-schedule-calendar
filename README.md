@@ -40,6 +40,10 @@ If the plugin does not appear, check that
 half creates that directory when it mounts, so its absence means the entry never
 loaded.
 
+`npm run doctor` walks the same chain and prints one PASS/FAIL line per step —
+profile manifest, bundle list, resolution, build freshness, and whether the host
+half has ever mounted.
+
 ### Chat tools
 
 `calendar_add` and `calendar_list` are registered best-effort: a composition
