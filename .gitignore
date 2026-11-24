@@ -2,9 +2,10 @@ node_modules/
 lib/client.cjs
 dist/
 npm-debug.log*
-# local scratch: research notes, backups of the DSH profile, package caches
+# local scratch: research notes, profile backups, package caches
 .research/
 .research-host/
 .backups/
 .npm-cache/
+.tmp/
 *.tgz
