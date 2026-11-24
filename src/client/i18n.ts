@@ -179,6 +179,8 @@ const EN: Record<string, string> = {
   提醒: 'Reminders',
   提醒时播放提示音: 'Play a sound with reminders',
   '同时发系统通知（DSH 最小化时也能看到）': 'Also raise a system notification (visible when DSH is minimised)',
+  '当前环境没有系统通知权限，到点仍会弹出应用内提醒。':
+    'This environment grants no system-notification permission; the in-app reminder still appears.',
   免打扰时段: 'Quiet hours',
   从: 'From',
   到: 'To',

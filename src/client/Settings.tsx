@@ -16,6 +16,16 @@ interface Props {
   onReload(): Promise<unknown> | void
 }
 
+/** Whether the environment can raise an operating-system notification. */
+function notificationState(): 'ok' | 'denied' | 'unsupported' {
+  try {
+    if (typeof Notification === 'undefined') return 'unsupported'
+    return Notification.permission === 'granted' ? 'ok' : Notification.permission === 'denied' ? 'denied' : 'unsupported'
+  } catch {
+    return 'unsupported'
+  }
+}
+
 /**
  * Render the settings drawer.
  * @param props - document and save callbacks.
@@ -137,6 +147,9 @@ export function SettingsPanel({ state, onClose, onSettings, onTerm, onReload }: 
               />
               <span>{t('同时发系统通知（DSH 最小化时也能看到）')}</span>
             </label>
+            {notificationState() !== 'ok' ? (
+              <p className="dshc-hint">{t('当前环境没有系统通知权限，到点仍会弹出应用内提醒。')}</p>
+            ) : null}
             <label className="dshc-switch">
               <input
                 type="checkbox"
