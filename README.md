@@ -98,6 +98,25 @@ node tests/smoke.mjs
 
 `scripts/wrap.mjs` wraps the compiled browser bundle in the `window.__ModuleLoader__.load` factory protocol DSH expects; `tests/smoke.mjs` mounts the host half into a fake cordis context and exercises every route.
 
+### Working on it with an agent
+
+This repository keeps its own handoff trail, and DSH loads the rules automatically
+from `AGENTS.md` at the start of every session:
+
+| File | Role |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | the rules: read order, definition of done, architecture red lines |
+| [`docs/state.md`](docs/state.md) | current snapshot — version, code map, open items, known pitfalls |
+| [`docs/devlog/`](docs/devlog/INDEX.md) | append-only history, one entry per unit of work |
+| [`docs/decisions/`](docs/decisions/README.md) | why the design is the way it is (ADRs) |
+
+```bash
+npm run log:new -- "what you are about to do"   # scaffold a devlog entry
+npm run docs:check                              # version/index/structure consistency
+```
+
+`npm test` runs `docs:check` first, so a change that skips its write-up fails the suite.
+
 ## License
 
 MIT

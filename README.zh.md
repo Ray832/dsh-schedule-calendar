@@ -70,6 +70,24 @@ npm run typecheck
 node tests/smoke.mjs
 ```
 
+### 和 agent 一起维护这个仓库
+
+仓库自带一套交接文档，DSH 会在每次会话开始时自动加载 `AGENTS.md` 里的规则：
+
+| 文件 | 作用 |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | 规则：开工顺序、收工清单、架构红线 |
+| [`docs/state.md`](docs/state.md) | 现状快照：版本、代码地图、待办、已知坑 |
+| [`docs/devlog/`](docs/devlog/INDEX.md) | 只追加的开发日志，一次工作一篇 |
+| [`docs/decisions/`](docs/decisions/README.md) | 设计理由（ADR） |
+
+```bash
+npm run log:new -- "这次要做什么"     # 生成日志骨架
+npm run docs:check                   # 校验版本、索引、结构一致
+```
+
+`npm test` 会先跑 `docs:check`，所以"改了代码没写说明"会让测试套件变红。
+
 ## 许可
 
 MIT

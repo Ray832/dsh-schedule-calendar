@@ -1,6 +1,9 @@
 node_modules/
 lib/client.cjs
 dist/
+# DSH loads these as local instruction overlays; keep personal notes out of git
+AGENTS.local.md
+CLAUDE.local.md
 npm-debug.log*
 # local scratch: research notes, profile backups, package caches
 .research/
