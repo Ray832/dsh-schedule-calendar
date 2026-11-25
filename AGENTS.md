@@ -65,8 +65,27 @@
   （除非 `pnpm run dev:web` 在跑）。
 - **锁**：桌面应用运行时持有 profile 的 `package.json.lock`；改 profile 文件需 `danger-full-access`，
   改完要重启应用才生效（bundle 列表是启动时快照）。
-- **推送**：代理走 `127.0.0.1:7897`，`-c http.sslBackend=openssl`，临时 askpass 脚本传 token，
-  推完立刻删除。细节见 `docs/devlog/2026-11-26-v1.2.0-delete-tool.md`。
+- **推送**：本机 `git credential fill` 用不了（helper 是 `manager`，非交互返回空；
+  `wincred` 明明有 `git:https://github.com` 条目却匹配不到），token 只能用
+  `scripts/gh-token.ps1` 从 Windows 凭据库直读。完整可复制的一段：
+
+  ```bash
+  PS="/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+  "$PS" -NoProfile -ExecutionPolicy Bypass -File scripts/gh-token.ps1   # 写出 token 文件，打印路径
+  # 用 @echo off + echo %GH_TOKEN% 生成临时 askpass.cmd，然后：
+  GH_TOKEN=$(cat <token>) GIT_ASKPASS=<askpass.cmd> GIT_TERMINAL_PROMPT=0 \
+    "/c/Program Files/Git/cmd/git.exe" \
+    -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 \
+    -c http.sslBackend=openssl \
+    -c http.sslCAInfo="C:/Program Files/Git/usr/ssl/certs/ca-bundle.crt" \
+    push https://github.com/Ray832/dsh-schedule-calendar.git HEAD:main
+  # 推完立刻删 token 文件与 askpass.cmd；再 git update-ref refs/remotes/origin/main <sha>
+  ```
+
+  不要 `fetch`（代理/schannel 会失败），远端跟踪引用手工 update-ref。
+  askpass 走 sh 会打 `couldn't create signal pipe` 警告，忽略即可，push 仍然成功。
+- **别删 `%TEMP%` 下的目录**：其中一个是本会话执行器的 `--temp`，删掉后所有 bash 调用报
+  `EXECUTOR_UNAVAILABLE`（写任意文件到该路径即可重建）。清理只删自建文件，不要 `rm -rf`。
 
 ---
 

@@ -6,12 +6,12 @@
 // Uses a throwaway DSH_HOME under the temp directory, so a test never touches
 // real data.
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
+import { makeTempHome } from './temp.mjs'
 
-const home = await mkdtemp(join(tmpdir(), 'dshc-smoke-'))
+const home = await makeTempHome('dshc-smoke-')
 process.env.DSH_HOME = home
 
 const plugin = await import('../lib/index.js')

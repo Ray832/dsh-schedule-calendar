@@ -2,13 +2,13 @@
 //
 //   node tests/notify.mjs
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { ReminderEngine } from '../lib/index.js'
+import { makeTempHome } from './temp.mjs'
 
-const home = await mkdtemp(join(tmpdir(), 'dshc-notify-'))
+const home = await makeTempHome('dshc-notify-')
 const logPath = join(home, 'notifications.json')
 
 /** A document with one event; overrides merge on top. */

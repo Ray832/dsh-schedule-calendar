@@ -40,6 +40,17 @@ for (const path of ['AGENTS.md', 'docs/state.md', 'docs/devlog/INDEX.md', 'docs/
   check(`${path} exists`, existsSync(join(root, path)))
 }
 
+// --- the rulebook stays small enough to be injected -------------------------
+// DSH injects AGENTS.md into the first request of every session with a 64 KiB
+// budget per chain; a rulebook nobody can afford to load is a rulebook nobody
+// reads.
+const agentsPath = join(root, 'AGENTS.md')
+if (existsSync(agentsPath)) {
+  const bytes = Buffer.byteLength(readFileSync(agentsPath, 'utf8'), 'utf8')
+  check('AGENTS.md fits the 64 KiB injection budget', bytes < 65536, `${(bytes / 1024).toFixed(1)} KiB`)
+  if (bytes > 16384) warn('AGENTS.md is past 16 KiB — move detail into docs/state.md instead')
+}
+
 // --- version agreement -------------------------------------------------------
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const state = read(statePath)

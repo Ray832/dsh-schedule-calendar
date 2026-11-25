@@ -3,12 +3,12 @@
 //
 //   node tests/tools.mjs
 
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
+import { makeTempHome } from './temp.mjs'
 
-const home = await mkdtemp(join(tmpdir(), 'dshc-tools-'))
+const home = await makeTempHome('dshc-tools-')
 process.env.DSH_HOME = home
 
 const plugin = await import('../lib/index.js')
