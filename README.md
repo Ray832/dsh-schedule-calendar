@@ -57,9 +57,18 @@ half has ever mounted.
 
 ### Chat tools
 
-`calendar_add` and `calendar_list` are registered best-effort: a composition
-whose presets do not expose a tool registry to host-level plugins simply skips
-them, and the panel's quick-add box keeps working with no loss of function.
+In any session, the model can schedule for you without the panel:
+
+- **`calendar_add`** — writes one or more events. It first agrees the events with
+  you in conversation, and then the call still stops at an approval prompt
+  before anything is written. Declining leaves the calendar untouched.
+- **`calendar_list`** — reads events in a date range, including occurrences of
+  repeating events, so the model can answer "what's on next week".
+
+Both are registered in the global tool layer, so every agent inherits them, and
+the panel reloads itself when a tool writes (it polls a cheap revision stamp).
+The tools need the profile's approval service; a composition without one denies
+`calendar_add` rather than writing silently.
 
 ## Configuration
 

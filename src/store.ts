@@ -127,6 +127,8 @@ export interface Store {
   update<T>(mutator: (state: CalendarState) => T): T
   /** Flush a pending write immediately. */
   flush(): void
+  /** Monotonic counter, bumped by every {@link Store.update}; cheap change detection. */
+  readonly revision: number
   /** Absolute path of the document, for diagnostics and export. */
   readonly path: string
 }
@@ -160,6 +162,7 @@ export function openStore(env: NodeJS.ProcessEnv = process.env, onError?: (error
 
   let timer: NodeJS.Timeout | undefined
   let dirty = false
+  let revision = 0
 
   const flush = (): void => {
     if (timer !== undefined) {
@@ -195,8 +198,12 @@ export function openStore(env: NodeJS.ProcessEnv = process.env, onError?: (error
     },
     update<T>(mutator: (draft: CalendarState) => T): T {
       const result = mutator(state)
+      revision += 1
       save()
       return result
+    },
+    get revision() {
+      return revision
     },
     flush,
     path: file,

@@ -50,6 +50,41 @@ export function CalendarPage() {
     void reload()
   }, [reload])
 
+  // The panel is not the only writer any more: the assistant can add events
+  // through `calendar_add` while this page is open. Poll the cheap revision
+  // stamp and reload when it moves, so a chat-side write shows up here.
+  useEffect(() => {
+    let alive = true
+    let seen = -1
+    const check = async (): Promise<void> => {
+      try {
+        const { revision } = await call<{ revision: number }>('state.rev')
+        if (!alive) return
+        if (seen === -1) {
+          seen = revision
+          return
+        }
+        if (revision !== seen) {
+          seen = revision
+          await reload()
+        }
+      } catch {
+        /* an unreachable host is reported by the visible error state */
+      }
+    }
+    void check()
+    const timer = setInterval(() => void check(), 6000)
+    const onFocus = (): void => void check()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [reload])
+
   /** Run a mutating host call and adopt the document it answers with. */
   const mutate = useCallback(async (method: string, body: unknown): Promise<boolean> => {
     setBusy(true)

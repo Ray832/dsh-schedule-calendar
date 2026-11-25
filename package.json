@@ -1,6 +1,6 @@
 {
   "name": "dsh-schedule-calendar",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Calendar, reminders, class timetable and long-term planning for DeepSeek Harness — with one-sentence scheduling through the DSH model.",
   "keywords": [
     "dsh",
@@ -60,7 +60,7 @@
     "build:client": "esbuild src/client/index.tsx --bundle --format=cjs --platform=browser --target=es2022 --jsx=automatic --charset=utf8 --legal-comments=none --external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@deepseek-ai/cordis --external:@deepseek-ai/dsh-client-store --external:@deepseek-ai/dsh-client-ui-slots --external:@deepseek-ai/dsh-client-ui-primitives --outfile=lib/client.cjs && node scripts/wrap.mjs",
     "typecheck": "tsc --noEmit",
     "doctor": "node scripts/doctor.mjs",
-    "test": "node tests/smoke.mjs && node tests/notify.mjs && node tests/repeat.mjs && node tests/client.mjs && node tests/i18n.mjs",
+    "test": "node tests/smoke.mjs && node tests/tools.mjs && node tests/notify.mjs && node tests/repeat.mjs && node tests/client.mjs && node tests/i18n.mjs",
     "release": "npm run build && npm test && npm pack --pack-destination dist"
   },
   "repository": {

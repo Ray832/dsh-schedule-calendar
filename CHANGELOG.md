@@ -4,6 +4,36 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.1.0] — 2026-11-25
+
+### Added
+
+- **The model can schedule from any session.** `calendar_add` writes events and
+  `calendar_list` reads them, both registered in the global tool layer so every
+  agent inherits them. No need to open the panel to record something.
+- **Every write asks first.** A `tools/pre-execute` listener returns `ask` for
+  `calendar_add`, so the call pauses at DSH's approval prompt — showing the
+  event titles and times — and a refusal writes nothing. The tool description
+  also tells the model to agree the events in conversation first.
+- **The panel follows chat-side writes.** `state.rev` is a cheap revision stamp;
+  the calendar polls it and reloads when a tool has changed the document.
+
+### Fixed
+
+- `calendar_add` and `calendar_list` never appeared, although the plugin claimed
+  to register them. Two causes, both now covered by tests: the definitions were
+  authored in the tool DSL while the registry takes raw JSON Schema (so
+  registration threw and the error was swallowed), and a failed registration was
+  invisible. Registration failures are now logged, success is logged with the
+  tool names, and `tests/tools.mjs` checks the compiled schemas against the
+  registry's accepted subset.
+
+### Notes
+
+- The tools need the profile's approval service (`@deepseek-ai/dsh-user-approval`,
+  mounted by the shipped profiles). Without it, `calendar_add` fails closed with
+  `APPROVAL_UNAVAILABLE` rather than writing silently.
+
 ## [1.0.0] — 2026-11-24
 
 First release.

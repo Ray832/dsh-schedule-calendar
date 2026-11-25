@@ -25,6 +25,23 @@ lab report due next Wednesday (all day)
 Press Parse; the model returns candidates and nothing is written until you
 confirm. If it looks wrong, rephrase and parse again.
 
+## Scheduling from a conversation
+
+You do not have to come back to the panel. Just say it in chat:
+
+```
+put the group meeting next Wednesday at 2pm in my calendar, remind me 10 minutes before
+split the final revision into three stages two weeks apart and put them in the calendar
+```
+
+The model restates what it is about to write, then an approval prompt lists the
+titles and times. Nothing is written unless you allow it; declining or closing
+the prompt leaves the calendar untouched. A few seconds later the calendar page
+reloads itself.
+
+You can also ask "what's on next week" — the model reads it with
+`calendar_list`, including every occurrence of repeating events.
+
 ## Reminders
 
 - Each event can carry several lead times (on time, 5, 10, 30, 60 minutes).

@@ -9,10 +9,11 @@
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
-import { buildToolDefinitions, parseCourses, parseEvents, registerTools, ParseError, type ParsedEvent } from './ai.js'
+import { parseCourses, parseEvents, ParseError, type ParsedEvent } from './ai.js'
 import { fromIcs, toIcs } from './ics.js'
 import { ReminderEngine, type Notice } from './notify.js'
 import { expandAll, parseStamp } from './repeat.js'
+import { installApprovalGate, registerCalendarTools } from './tools.js'
 import { dataDir, normalize, openStore, type Store } from './store.js'
 import type { CalendarEvent, CalendarSettings, CalendarState, Course, Milestone, Plan, Repeat, Term } from './types.js'
 
@@ -41,8 +42,12 @@ interface PluginContext {
     }): () => void
   }
   effect(callback: () => (() => void) | void, label?: string): void
+  /** Present once a tool registry exists; tools are registered through it. */
+  inject?(deps: string[], callback: (scope: { tools?: { register(definition: unknown): () => void } }) => void): void
+  /** Present in every cordis composition; the approval gate listens through it. */
+  on?(event: string, listener: (...args: never[]) => unknown): () => void
   get(key: string): unknown
-  logger?: { warn(...args: unknown[]): void; info?(...args: unknown[]): void }
+  logger?: { warn(...args: unknown[]): void; error?(...args: unknown[]): void; info?(...args: unknown[]): void }
 }
 
 /** Reply helpers. */
@@ -234,6 +239,9 @@ function createRouter(store: Store, engine: ReminderEngine, context: PluginConte
   return {
     /** Whole document, for the first paint and after a reload. */
     'state.get': (): CalendarState => store.state,
+
+    /** Cheap change stamp: the page polls it so a write from chat reaches the panel. */
+    'state.rev': (): { revision: number } => ({ revision: store.revision }),
 
     /** Liveness probe used by the browser half's error state. */
     ping: () => ({ ok: true, path: store.path }),
@@ -525,28 +533,20 @@ export function apply(ctx: PluginContext): void {
   })
   const router = createRouter(store, engine, ctx)
 
-  registerTools(ctx, (tools) => {
-    const registry = tools as { register(definition: unknown): void }
-    for (const definition of buildToolDefinitions({
-      add: (events: ParsedEvent[]) =>
-        store.update((state) => {
-          const created: CalendarEvent[] = []
-          for (const row of events) {
-            const event = cleanEvent({ ...row, source: 'ai' })
-            state.events.push(event)
-            created.push(event)
-          }
-          return created.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
-        }),
-      list: (from: string, to: string) => eventsInRange(store.state, from, to),
-    })) {
-      try {
-        registry.register(definition)
-      } catch (error) {
-        ctx.logger?.warn('[dsh-schedule-calendar] tool registration skipped:', error)
-      }
-    }
+  registerCalendarTools(ctx, {
+    add: (events: ParsedEvent[]) =>
+      store.update((state) => {
+        const created: CalendarEvent[] = []
+        for (const row of events) {
+          const event = cleanEvent({ ...row, source: 'ai' })
+          state.events.push(event)
+          created.push(event)
+        }
+        return created.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
+      }),
+    list: (from: string, to: string) => eventsInRange(store.state, from, to),
   })
+  installApprovalGate(ctx)
 
   ctx.effect(() => engine.start(), 'dsh-schedule-calendar: reminder scan')
 
