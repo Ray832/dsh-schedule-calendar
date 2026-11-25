@@ -53,8 +53,8 @@ plugin.apply(ctx)
 
 assert.deepEqual(
   [...registered.keys()].sort(),
-  ['calendar_add', 'calendar_complete', 'calendar_delete', 'calendar_list', 'calendar_update'],
-  'all five tools register',
+  ['calendar_add', 'calendar_delete', 'calendar_list', 'calendar_update'],
+  'all four tools register',
 )
 assert.equal(typeof preExecute, 'function', 'the approval gate installs a pre-execute listener')
 
@@ -100,7 +100,6 @@ for (const [name, definition] of registered) {
 const add = registered.get('calendar_add')
 const list = registered.get('calendar_list')
 const update = registered.get('calendar_update')
-const complete = registered.get('calendar_complete')
 const del = registered.get('calendar_delete')
 assert.match(add.description, /after the user has agreed/i, 'the write tool tells the model to agree first')
 assert.match(list.description, /what is coming up/i, 'the list tool names the questions it answers')
@@ -108,8 +107,8 @@ assert.match(list.description, /ids that calendar_update/i, 'the list tool point
 assert.match(del.description, /calendar_list first/i, 'the delete tool says where ids come from')
 assert.match(del.description, /cannot be undone/i, 'the delete tool warns about permanence')
 assert.match(update.description, /calendar_list first/i, 'the update tool says where ids come from')
-assert.match(update.description, /calendar_complete instead/i, 'the update tool sends completion elsewhere')
-assert.match(complete.description, /done/i, 'the complete tool names the state it sets')
+assert.match(update.description, /done: true/i, 'the update tool carries completion')
+assert.match(update.description, /done: false/i, 'and reopening')
 assert.match(list.description, /already done/i, 'the list tool reports completion')
 
 // --- execution --------------------------------------------------------------
@@ -164,19 +163,31 @@ assert.equal(afterUpdate.events[0].reminder, 'lead 3 days', 'the list reports th
 assert.throws(() => update.execute({ events: [{ id: created.created[0].id }] }, {}), /changes nothing/)
 assert.throws(() => update.execute({ events: [{ start: '2026-11-27T09:00' }] }, {}), /needs an id/)
 
-// --- completion -------------------------------------------------------------
+// --- completion goes through the same patch ---------------------------------
 
-const marked = complete.execute({ ids: [created.created[0].id] }, {})
+const marked = update.execute({ events: [{ id: created.created[0].id, done: true }] }, {})
 assert.equal(marked.updated[0].done, true)
-assert.match(complete.output.render({}, marked)[0].text, /Marked done: 小组讨论/)
+assert.deepEqual(marked.updated[0].changed, ['done'], 'only the completion changed')
+assert.match(update.output.render({}, marked)[0].text, /Marked done: 小组讨论/)
 
 const doneList = list.execute({ from: '2026-11-27', to: '2026-11-27' }, {})
 assert.equal(doneList.events[0].done, true, 'the list reports the completion')
 assert.match(list.output.render({}, doneList)[0].text, /done/)
 
-const reopened = complete.execute({ ids: [created.created[0].id], done: false }, {})
+const reopened = update.execute({ events: [{ id: created.created[0].id, done: false }] }, {})
 assert.equal(reopened.updated[0].done, false, 'done: false puts it back')
-assert.match(complete.output.render({}, reopened)[0].text, /Reopened: 小组讨论/)
+assert.match(update.output.render({}, reopened)[0].text, /Reopened: 小组讨论/)
+
+// A patch that changes a field and the completion reports both.
+const both = update.execute(
+  { events: [{ id: created.created[0].id, title: '小组讨论（终）', done: true }] },
+  {},
+)
+assert.deepEqual(both.updated[0].changed, ['title', 'done'])
+assert.equal(both.updated[0].done, true)
+assert.match(update.output.render({}, both)[0].text, /Updated: 小组讨论（终）/)
+// Put it back the way the later delete assertions expect.
+await update.execute({ events: [{ id: created.created[0].id, title: '小组讨论', done: false }] }, {})
 
 // Malformed input fails with an actionable message instead of writing.
 assert.throws(() => add.execute({ events: [{ title: '', start: '2026-11-26T14:00' }] }, {}), /events\[0\]/)
@@ -213,13 +224,22 @@ assert.match(updateAsk.displayReason, /修改日程/, 'the prompt says it is an 
 assert.match(updateAsk.displayReason, /2026-11-27 09:00.*2026-11-28 09:00/s, 'the prompt shows old and new time')
 assert.match(updateAsk.reason, /Update 1 event/, 'the logged reason says update')
 
-const completeAsk = preExecute({ name: 'calendar_complete', arguments: { ids: [created.created[0].id] } }, next)
+// A completion is a patch, but the prompt still reads as a completion.
+const completeAsk = preExecute({ name: 'calendar_update', arguments: { events: [{ id: created.created[0].id, done: true }] } }, next)
 assert.equal(completeAsk.kind, 'ask', 'a completion pauses for approval')
 assert.match(completeAsk.displayReason, /标记完成/, 'the prompt says it marks done')
 assert.match(completeAsk.displayReason, /小组讨论/, 'the prompt names the event')
+assert.match(completeAsk.displayReason, /未完成.*完成/, 'the prompt shows the state change')
 
-const reopenAsk = preExecute({ name: 'calendar_complete', arguments: { ids: [created.created[0].id], done: false } }, next)
+const reopenAsk = preExecute({ name: 'calendar_update', arguments: { events: [{ id: created.created[0].id, done: false }] } }, next)
 assert.match(reopenAsk.displayReason, /取消完成/, 'reopening says so')
+
+// A mixed patch is an ordinary update again.
+const mixedAsk = preExecute(
+  { name: 'calendar_update', arguments: { events: [{ id: created.created[0].id, location: '教三', done: true }] } },
+  next,
+)
+assert.match(mixedAsk.displayReason, /修改日程/, 'a mixed patch is an update')
 
 const passthrough = preExecute({ name: 'calendar_list', arguments: {} }, next)
 assert.equal(passthrough, 'delegated', 'a read is not gated')
@@ -253,4 +273,4 @@ const again = del.execute({ ids: [created.created[0].id] }, {})
 assert.equal(again.deleted.length, 0, 'deleting an unknown id reports nothing removed, without throwing')
 
 await rm(home, { recursive: true, force: true })
-console.log('tools: registration OK (five tools, schema subset, list ids and done state, update, complete, delete, approval gate, truncation)')
+console.log('tools: registration OK (four tools, schema subset, list ids and done state, update incl. completion, delete, approval gate, truncation)')

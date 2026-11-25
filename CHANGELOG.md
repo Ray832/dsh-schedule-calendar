@@ -4,6 +4,21 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.1] — 2026-11-26
+
+### Changed
+
+- **`calendar_complete` is gone; `calendar_update` handles completion.** A
+  completion state is a field of the event, so changing it is an update, not a
+  second way to write the same record. `calendar_update` now takes `done: true`
+  to mark an event done and `done: false` to reopen it, and its description
+  keeps the trigger words ("finished", "handed in", "attended"), so the model
+  still recognises the intent. A call that only flips completion still reads as
+  **标记完成 / Mark done** in the approval prompt and as `Marked done: …` in the
+  result.
+- The tool set is `calendar_add`, `calendar_list`, `calendar_update`,
+  `calendar_delete`.
+
 ## [1.3.0] — 2026-11-26
 
 ### Added

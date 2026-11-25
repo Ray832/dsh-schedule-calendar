@@ -7,6 +7,7 @@
 
 | 日期 | 版本 | 主题 | 日志 |
 |---|---|---|---|
+| 2026-11-26 | 1.3.1 | v1.3.1 merge complete into update | [2026-11-26-v1.3.1-merge-complete-into-update.md](2026-11-26-v1.3.1-merge-complete-into-update.md) |
 | 2026-11-26 | 1.3.0 | v1.3.0 手动完成与提醒三档 | [2026-11-26-v1.3.0-manual-done-and-reminder-tiers.md](2026-11-26-v1.3.0-manual-done-and-reminder-tiers.md) |
 | 2026-11-26 | — | 建立日志与交接体系（AGENTS.md / state / devlog / ADR / docs:check） | [2026-11-26-docs-logging-system.md](2026-11-26-docs-logging-system.md) |
 | 2026-11-26 | 1.2.0 | `calendar_delete`，问安排必须读日程，真机验证删除链 | [2026-11-26-v1.2.0-delete-tool.md](2026-11-26-v1.2.0-delete-tool.md) |

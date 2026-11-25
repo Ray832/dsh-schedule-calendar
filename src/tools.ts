@@ -1,18 +1,21 @@
 /**
- * The five model-facing tools.
+ * The four model-facing tools.
  *
- * | tool                | gated | why it exists                                  |
- * |---------------------|-------|------------------------------------------------|
- * | `calendar_add`      | yes   | write new events                               |
- * | `calendar_list`     | no    | read the calendar, including what is done      |
- * | `calendar_update`   | yes   | change time, place, note or reminder of one    |
- * | `calendar_complete` | yes   | mark plans done, or put them back              |
- * | `calendar_delete`   | yes   | remove events for good                         |
+ * | tool              | gated | why it exists                                   |
+ * |-------------------|-------|-------------------------------------------------|
+ * | `calendar_add`    | yes   | write new events                                |
+ * | `calendar_list`   | no    | read the calendar, including what is done       |
+ * | `calendar_update` | yes   | change anything about one event, done included  |
+ * | `calendar_delete` | yes   | remove events for good                          |
  *
- * Splitting update and complete from add is deliberate: `calendar_add` requires
- * a title and a start, so overloading it with "patch by id" would push the model
- * towards re-sending whole events (and duplicating them). One tool per intent
- * also lets each description carry the trigger words the model needs.
+ * `calendar_update` is the single way to change stored event information —
+ * time, title, place, note, all-day flag, reminder tier and completion state.
+ * Completion used to have its own tool; merging it here keeps one patch path and
+ * one approval prompt instead of two tools that write the same record.
+ *
+ * `calendar_add` stays create-only: it requires a title and a start, so
+ * overloading it with "patch by id" would push the model towards re-sending
+ * whole events (and duplicating them).
  *
  * Definitions are compiled from the author DSL into the raw schema subset the
  * registry accepts; see `tool-schema.ts` for why the conversion is local.
@@ -29,17 +32,14 @@ export const ADD_TOOL = 'calendar_add'
 /** Name of the read-only tool. */
 export const LIST_TOOL = 'calendar_list'
 
-/** Name of the field-patch tool. */
+/** Name of the field-patch tool; it also carries completion state. */
 export const UPDATE_TOOL = 'calendar_update'
-
-/** Name of the completion tool. */
-export const COMPLETE_TOOL = 'calendar_complete'
 
 /** Name of the destructive tool. */
 export const DELETE_TOOL = 'calendar_delete'
 
 /** Every tool this plugin registers. */
-export const TOOL_NAMES = [ADD_TOOL, LIST_TOOL, UPDATE_TOOL, COMPLETE_TOOL, DELETE_TOOL] as const
+export const TOOL_NAMES = [ADD_TOOL, LIST_TOOL, UPDATE_TOOL, DELETE_TOOL] as const
 
 /** One event as the tools return it. */
 export interface ToolEvent {
@@ -66,14 +66,15 @@ export interface ToolPatch {
   location?: string
   note?: string
   reminder?: ReminderPlan
+  /** `true` marks the event done, `false` reopens it. */
+  done?: boolean
 }
 
 /** What the tools do to the calendar. */
 export interface ToolHandlers {
   add(events: ParsedEvent[]): ToolEvent[]
   list(from: string, to: string): ToolListed[]
-  update(patches: ToolPatch[]): ToolEvent[]
-  complete(ids: string[], done: boolean): ToolEvent[]
+  update(patches: ToolPatch[]): Array<ToolEvent & { done: boolean }>
   remove(ids: string[]): ToolEvent[]
 }
 
@@ -138,6 +139,10 @@ const PATCH_PARAMETERS: Record<string, AuthorSchema> = {
   location: { type: 'string', description: 'New place; an empty string clears it.' },
   note: { type: 'string', description: 'New note; an empty string clears it.' },
   reminder: REMINDER_PARAMETERS,
+  done: {
+    type: 'boolean',
+    description: 'true marks the event done, false reopens it. Omit to leave the state alone.',
+  },
 }
 
 /** The created-event shape returned by `calendar_add`. */
@@ -206,31 +211,9 @@ const UPDATE_OUTPUT: AuthorSchema = {
           changed: {
             type: 'array',
             required: true,
-            items: { type: 'string', description: 'A field name that changed: title, time, all-day, place, note, reminder.' },
+            items: { type: 'string', description: 'A field name that changed: title, time, all-day, place, note, reminder, done.' },
           },
-        },
-      },
-    },
-  },
-}
-
-/** The completion shape returned by `calendar_complete`. */
-const COMPLETE_OUTPUT: AuthorSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    updated: {
-      type: 'array',
-      required: true,
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          id: { type: 'string', required: true },
-          title: { type: 'string', required: true },
-          start: { type: 'string', required: true },
-          end: { type: 'string', required: true },
-          done: { type: 'boolean', required: true },
+          done: { type: 'boolean', required: true, description: 'The completion state after the patch.' },
         },
       },
     },
@@ -291,6 +274,7 @@ function readPatch(raw: unknown): ToolPatch | null {
   if (typeof row.note === 'string') patch.note = row.note
   const reminder = readReminder(row.reminder)
   if (reminder !== undefined) patch.reminder = reminder
+  if (row.done === true || row.done === false) patch.done = row.done
   return patch
 }
 
@@ -303,6 +287,7 @@ function changedFields(patch: ToolPatch): string[] {
   if (patch.location !== undefined) out.push('place')
   if (patch.note !== undefined) out.push('note')
   if (patch.reminder !== undefined) out.push('reminder')
+  if (patch.done !== undefined) out.push('done')
   return out
 }
 
@@ -338,20 +323,6 @@ export function calendarToolDefinitions(handlers: ToolHandlers): unknown[] {
   })
   const updateSchema = outputToSchema(UPDATE_OUTPUT)
 
-  const completeParameters = parametersToSchema({
-    ids: {
-      type: 'array',
-      required: true,
-      items: { type: 'string', description: 'An id returned by calendar_list.' },
-      description: 'Events to mark.',
-    },
-    done: {
-      type: 'boolean',
-      description: 'True (the default) marks them done; false reopens them.',
-    },
-  })
-  const completeSchema = outputToSchema(COMPLETE_OUTPUT)
-
   const deleteParameters = parametersToSchema({
     ids: {
       type: 'array',
@@ -369,8 +340,6 @@ export function calendarToolDefinitions(handlers: ToolHandlers): unknown[] {
     ['calendar_list.output', listSchema],
     ['calendar_update.parameters', updateParameters],
     ['calendar_update.output', updateSchema],
-    ['calendar_complete.parameters', completeParameters],
-    ['calendar_complete.output', completeSchema],
     ['calendar_delete.parameters', deleteParameters],
     ['calendar_delete.output', deleteSchema],
   ] as const) {
@@ -413,7 +382,7 @@ export function calendarToolDefinitions(handlers: ToolHandlers): unknown[] {
     {
       name: LIST_TOOL,
       description:
-        "List the user's calendar events between two local dates, inclusive, with every occurrence of repeating events and whether each one is already done. Call it whenever the answer depends on what the user already has scheduled — \"what is coming up\", \"what's on next week\", \"am I free on Thursday\", \"what is still open\", or any question about their plans — instead of answering from memory. It is also the only way to obtain the ids that calendar_update, calendar_complete and calendar_delete need.",
+        "List the user's calendar events between two local dates, inclusive, with every occurrence of repeating events and whether each one is already done. Call it whenever the answer depends on what the user already has scheduled — \"what is coming up\", \"what's on next week\", \"am I free on Thursday\", \"what is still open\", or any question about their plans — instead of answering from memory. It is also the only way to obtain the ids that calendar_update and calendar_delete need.",
       parameters: listParameters,
       output: {
         schema: listSchema,
@@ -447,18 +416,25 @@ export function calendarToolDefinitions(handlers: ToolHandlers): unknown[] {
     {
       name: UPDATE_TOOL,
       description:
-        "Change existing events in the user's DSH calendar by id: time, title, place, note, all-day flag or reminder tier. Call calendar_list first and copy its ids; never guess one. Send only the fields that change — a field you leave out keeps its value, and an empty string clears a place or note. To mark something done use calendar_complete instead. Every call pauses for an explicit approval that shows the old and new values.",
+        "Change an existing event in the user's DSH calendar by id: time, title, place, note, all-day flag, reminder tier, or completion state. Use it whenever the user says a plan is finished, handed in, attended or done — with done: true — or wants it reopened — done: false; also for any correction to what was scheduled. Call calendar_list first and copy its ids; never guess one. Send only the fields that change: a field you leave out keeps its value, and an empty string clears a place or note. Every call pauses for an explicit approval that shows the old and new values.",
       parameters: updateParameters,
       output: {
         schema: updateSchema,
-        render: (_args: unknown, value: { updated: Array<ToolEvent & { changed: string[] }> }) => [
+        render: (_args: unknown, value: { updated: Array<ToolEvent & { changed: string[]; done: boolean }> }) => [
           {
             type: 'text',
             text:
               value.updated.length === 0
                 ? 'Nothing was updated.'
                 : value.updated
-                    .map((event) => `Updated: ${event.title} — ${human(event.start)} (${event.changed.length === 0 ? 'no field changed' : event.changed.join(', ')})`)
+                    .map((event) => {
+                      // A completion reads as an action, not as a field diff.
+                      if (event.changed.length === 1 && event.changed[0] === 'done') {
+                        return `${event.done ? 'Marked done' : 'Reopened'}: ${event.title} — ${human(event.start)}`
+                      }
+                      const fields = event.changed.length === 0 ? 'no field changed' : event.changed.join(', ')
+                      return `Updated: ${event.title} — ${human(event.start)} (${fields})`
+                    })
                     .join('\n'),
           },
         ],
@@ -475,37 +451,12 @@ export function calendarToolDefinitions(handlers: ToolHandlers): unknown[] {
           patches.push(patch)
         }
         const updated = handlers.update(patches)
-        return { updated: updated.map((event, index) => ({ ...event, changed: changedFields(patches[index] as ToolPatch) })) }
-      },
-      isConcurrencySafe: () => false,
-    },
-    {
-      name: COMPLETE_TOOL,
-      description:
-        "Mark events in the user's DSH calendar as done, or put them back to open with done: false. Use it whenever the user says they finished, did, attended, handed in or completed something, and when they want to reopen it. Call calendar_list first and copy the ids; never guess one. Every call pauses for an explicit approval.",
-      parameters: completeParameters,
-      output: {
-        schema: completeSchema,
-        render: (_args: unknown, value: { updated: Array<ToolEvent & { done: boolean }> }) => [
-          {
-            type: 'text',
-            text:
-              value.updated.length === 0
-                ? 'Nothing was marked.'
-                : value.updated
-                    .map((event) => `${event.done ? 'Marked done' : 'Reopened'}: ${event.title} — ${human(event.start)}`)
-                    .join('\n'),
-          },
-        ],
-      },
-      execute: (args: { ids?: unknown; done?: unknown }) => {
-        if (args === null || typeof args !== 'object' || !Array.isArray(args.ids) || args.ids.length === 0) {
-          throw new Error('ids must be a non-empty array of event ids from calendar_list')
+        return {
+          updated: updated.map((event, index) => ({
+            ...event,
+            changed: changedFields(patches[index] as ToolPatch),
+          })),
         }
-        const ids = args.ids.map((id) => String(id)).filter((id) => id !== '')
-        if (ids.length === 0) throw new Error('ids must be a non-empty array of event ids from calendar_list')
-        const done = args.done !== false
-        return { updated: handlers.complete(ids, done).map((event) => ({ ...event, done })) }
       },
       isConcurrencySafe: () => false,
     },
@@ -632,21 +583,6 @@ function summarizeDelete(args: unknown, lookup?: (ids: string[]) => KnownEvent[]
   return { count: known.length, lines }
 }
 
-/** Describe a completion payload for the prompt. */
-function summarizeComplete(args: unknown, lookup?: (ids: string[]) => KnownEvent[]): Summary | null {
-  const ids = (args as { ids?: unknown } | undefined)?.ids
-  if (!Array.isArray(ids) || ids.length === 0) return null
-  const done = (args as { done?: unknown }).done !== false
-  const known = resolve(ids, lookup)
-  const verb = done ? '标记完成' : '取消完成'
-  if (known.length === 0) {
-    return { count: ids.length, lines: ids.slice(0, 5).map((id) => `· ${verb} ${String(id)}`) }
-  }
-  const lines = known.slice(0, 5).map((event) => `· ${event.title} — ${human(event.start)}`)
-  if (known.length > 5) lines.push(`· …${known.length - 5} more`)
-  return { count: known.length, lines }
-}
-
 /** `时间 2026-12-02 10:00 → 2026-12-03 14:00` for one changed field. */
 function diffLine(field: string, before: string, after: string): string {
   return `${field} ${before === '' ? '∅' : before} → ${after === '' ? '∅' : after}`
@@ -678,6 +614,10 @@ function summarizeUpdate(args: unknown, lookup?: (ids: string[]) => KnownEvent[]
     if (patch.reminder !== undefined) {
       changes.push(diffLine('提醒/remind', describePlan(before?.reminder, 'zh'), describePlan(patch.reminder, 'zh')))
     }
+    if (patch.done !== undefined) {
+      const mark = (value: boolean | undefined): string => (value === true ? '✓ 完成' : '☐ 未完成')
+      changes.push(diffLine('状态/done', before === undefined ? '?' : mark(before.done), mark(patch.done)))
+    }
     lines.push(`· ${head} — ${changes.length === 0 ? 'no field' : changes.join('；')}`)
   }
   if (rows.length > 5) lines.push(`· …${rows.length - 5} more`)
@@ -704,7 +644,7 @@ export function installApprovalGate(ctx: ToolContext, options: ApprovalOptions =
   try {
     ctx.on('tools/pre-execute', ((exec: { name?: string; arguments?: unknown }, next: () => unknown) => {
       const name = exec?.name
-      if (name !== ADD_TOOL && name !== UPDATE_TOOL && name !== COMPLETE_TOOL && name !== DELETE_TOOL) return next()
+      if (name !== ADD_TOOL && name !== UPDATE_TOOL && name !== DELETE_TOOL) return next()
 
       let summary: Summary | null = null
       let label = ''
@@ -715,13 +655,19 @@ export function installApprovalGate(ctx: ToolContext, options: ApprovalOptions =
         verb = 'Add'
       } else if (name === UPDATE_TOOL) {
         summary = summarizeUpdate(exec.arguments, options.lookup)
-        label = '修改日程 / Update calendar'
-        verb = 'Update'
-      } else if (name === COMPLETE_TOOL) {
-        summary = summarizeComplete(exec.arguments, options.lookup)
-        const done = (exec.arguments as { done?: unknown } | undefined)?.done !== false
-        label = done ? '标记完成 / Mark done' : '取消完成 / Reopen'
-        verb = done ? 'Mark done' : 'Reopen'
+        // A patch that only flips completion is a completion, and the prompt
+        // should say so instead of the generic "update".
+        const rows = (exec.arguments as { events?: unknown[] } | undefined)?.events
+        const patches = (Array.isArray(rows) ? rows : []).map((row) => readPatch(row)).filter((patch): patch is ToolPatch => patch !== null)
+        const completionOnly = patches.length > 0 && patches.every((patch) => changedFields(patch).join() === 'done')
+        const reopening = completionOnly && patches.every((patch) => patch.done === false)
+        if (completionOnly) {
+          label = reopening ? '取消完成 / Reopen' : '标记完成 / Mark done'
+          verb = reopening ? 'Reopen' : 'Mark done'
+        } else {
+          label = '修改日程 / Update calendar'
+          verb = 'Update'
+        }
       } else {
         summary = summarizeDelete(exec.arguments, options.lookup)
         label = '删除日程 / Delete from calendar'

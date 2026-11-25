@@ -578,19 +578,13 @@ export function apply(ctx: PluginContext): void {
           state.events[index] = merged
           updated.push(merged)
         }
-        return updated.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
-      }),
-    complete: (ids: string[], done: boolean) =>
-      store.update((state) => {
-        const updated: CalendarEvent[] = []
-        for (const id of ids) {
-          const event = state.events.find((candidate) => candidate.id === id)
-          if (event === undefined) throw new InputError('not-found', `no event with id ${id}`)
-          event.done = done
-          event.updatedAt = Date.now()
-          updated.push(event)
-        }
-        return updated.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
+        return updated.map((event) => ({
+          id: event.id,
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          done: event.done === true,
+        }))
       }),
     remove: (ids: string[]) =>
       store.update((state) => {

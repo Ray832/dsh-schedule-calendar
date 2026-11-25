@@ -1,6 +1,10 @@
 # 0008 一个意图一个工具：新增 update / complete，不改造 add
 
-- 状态：Accepted
+> **已被 [0009](0009-completion-in-update.md) 部分取代**：`calendar_update` 与
+> `calendar_add` 分开的判断仍然有效（upsert 会诱导模型重发整条事件），但
+> "完成状态单独成工具"被推翻了——完成是日程的一个字段，不该有两个写入口。
+
+- 状态：Superseded by [0009](0009-completion-in-update.md)（"完成单独成工具"这一部分）
 - 日期：2026-11-26
 - 相关：`src/tools.ts`、`docs/devlog/2026-11-26-v1.3.0-manual-done-and-reminder-tiers.md`
 

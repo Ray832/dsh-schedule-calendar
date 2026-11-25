@@ -3,7 +3,7 @@
 > 这是**覆盖式**更新的现状快照，不是历史。历史在 `docs/devlog/`，设计理由在 `docs/decisions/`。
 > 每个会话开始读这一页就够开工；改动完成后必须回来更新它。
 
-- 当前版本：**1.3.0**
+- 当前版本：**1.3.1**
 - 最后更新：2026-11-26（Asia/Shanghai）
 - 状态：**可发布、可用**。宿主与客户端都已在本机 DSH 加载并实测通过。
 - 一句话：给 DSH 加日历 + 三档提醒 + 课表 + 长期规划，并让模型经审批读写日程、标记完成。
@@ -38,7 +38,7 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 | `src/index.ts` | 605 | 插件入口：store/engine/router/tools/审批门/24 条路由 |
 | `src/tool-schema.ts` | 204 | 工具 author DSL → raw JSON Schema 编译器 + 校验 |
 | `src/remind.ts` | 178 | 提醒档位：档位→提前分钟数展开、钳制、旧数据迁移、文案 |
-| `src/tools.ts` | 742 | 五个工具 + 注册 + 审批门（含 update 的新旧值对比） |
+| `src/tools.ts` | 688 | 四个工具 + 注册 + 审批门（update 的摘要并列新旧值） |
 | `src/notify.ts` | 290 | `ReminderEngine`：15s tick、**向前看 15 天**、12h 回看、30min 过期、静音时段 |
 | `src/ai.ts` | 258 | 一句话解析：`parseEvents` / `parseCourses`（纯规则，不调模型） |
 | `src/ics.ts` | 219 | ICS 导入导出 |
@@ -71,16 +71,16 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 
 ## 4. 工具与审批（v1.1–v1.2 的核心）
 
-五个工具注册在**全局层**，所有 agent 都能看到（只有 list 免审批）：
+四个工具注册在**全局层**，所有 agent 都能看到（只有 list 免审批）：
 
 - `calendar_add` — 写事件
 - `calendar_list` — 读事件，返回 id + 完成状态 + 提醒摘要
-- `calendar_update` — 按 id 改时间/标题/地点/备注/全天/提醒档位（审批框显示新旧值）
-- `calendar_complete` — 标记完成 / `done: false` 取消完成
+- `calendar_update` — 按 id 改时间/标题/地点/备注/全天/提醒档位/**完成状态**（`done`）
 - `calendar_delete` — 按 id 删
 
-> 为什么 update/complete 不并进 add：add 要求 title+start，把"按 id 打补丁"塞进去会诱导模型重发整条
-> 事件（从而重复创建）；而且一个意图一个工具，description 才能各自写清触发词。见 ADR 0007/0008。
+> **写日程信息只有 update 一条路径。** 完成状态是事件的一个字段，曾经单独做成 `calendar_complete`，
+> v1.3.1 按用户判断并回 update（ADR 0009）。只改完成状态的调用，审批标题仍是「标记完成」。
+> add 仍然只管创建：它要求 title+start，塞进"按 id 打补丁"会诱导模型重发整条事件而重复创建（ADR 0008）。
 
 链路：`tools/pre-execute`（waterfall）→ 返回 `{kind:'ask', reason, displayReason}` →
 `approval.request()` → `allowed-once` / `rejected` / `cancelled` / `unavailable`。
@@ -98,6 +98,7 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 - v1.1.0 — 模型可在任意 session 经审批写入日程（`calendar_add` / `calendar_list`）。
 - v1.2.0 — `calendar_delete`；`calendar_list` 返回 id 并明确"何时该调用"。
 - 2026-11-26 — 建立日志/交接体系（本文件、`AGENTS.md`、`docs/devlog/`、`docs/decisions/`、`docs:check`）。
+- v1.3.1 — `calendar_complete` 并入 `calendar_update`（`done` 字段），工具回到四个；审批与结果文案对"只改完成"仍显示标记完成/取消完成。
 - v1.3.0 — 提醒改为**三档**（短期时分 / 中期 1-15 天 / 长期每 1/3/5/7 天）；
   日程可**手动标记完成**（议程勾选 + 编辑器开关），完成的事件不再提醒；
   新增 `calendar_update` / `calendar_complete`，`calendar_list` 返回 `done`；
@@ -136,7 +137,9 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
    提醒永远不会触发（v1.3.0 修）。窗口现在是 `now + 15 天`，改档位上限时要同步改这里。
 10. **提醒有两个字段**：`reminder`（档位，真实来源）与 `remindBefore`（派生分钟数组，给 ICS/引擎用）。
     只有 `cleanEvent` 会写两者；手改 `remindBefore` 会在下次保存时被覆盖。旧文档没有 `reminder` 时保留原数组不迁移。
-11. **不要删 `%TEMP%` 下的目录**：DSH 会话执行器的 `--temp` 就在里面，删掉之后所有 bash 调用报
+11. **审批门按工具名分派**：新增写操作工具时必须在 `installApprovalGate` 里加一支，否则会**静默绕过审批**；
+    `tests/tools.mjs` 对每个写工具都有一条断言，改工具集时先看它。
+12. **不要删 `%TEMP%` 下的目录**：DSH 会话执行器的 `--temp` 就在里面，删掉之后所有 bash 调用报
    `EXECUTOR_UNAVAILABLE`；用 `write` 往该路径写任意文件即可重建目录恢复。清理只删自建文件。
    重建出的目录**不让创建子目录**（`mkdir` Permission denied，ACL 却和父目录一致 → 沙箱策略），
    所以 `tests/temp.mjs` 在 `os.tmpdir()` 不可写时回退到 `.tmp/tests`。

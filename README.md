@@ -67,17 +67,17 @@ In any session, the model can read and change your calendar without the panel:
   you in conversation, and then the call still stops at an approval prompt
   before anything is written. Declining leaves the calendar untouched.
 - **`calendar_update`** — changes one event by id: time, title, place, note,
-  all-day flag or reminder tier. Send only the fields that change; the approval
-  prompt shows the old and new values side by side.
-- **`calendar_complete`** — marks events done, or reopens them with
-  `done: false`. `calendar_list` reports the completion state, so "what is still
-  open" is a question the model can answer.
+  all-day flag, reminder tier, or `done` (true marks it finished, false reopens
+  it). Send only the fields that change; the approval prompt shows the old and
+  new values side by side, and a completion-only call reads as "mark done".
+  `calendar_list` reports the completion state, so "what is still open" is a
+  question the model can answer.
 - **`calendar_delete`** — removes events by the ids `calendar_list` returned, and
   is gated the same way; the prompt names the events that will disappear.
   Deleting removes the whole stored event, so a repeating event loses every
   occurrence.
 
-All five are registered in the global tool layer, so every agent inherits them,
+All four are registered in the global tool layer, so every agent inherits them,
 and the panel reloads itself when a tool writes (it polls a cheap revision
 stamp). The writing tools need the profile's approval service; a composition
 without one denies the call rather than changing anything silently.
