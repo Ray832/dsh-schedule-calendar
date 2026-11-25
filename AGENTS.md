@@ -84,6 +84,7 @@
 
   不要 `fetch`（代理/schannel 会失败），远端跟踪引用手工 update-ref。
   askpass 走 sh 会打 `couldn't create signal pipe` 警告，忽略即可，push 仍然成功。
+  `gh-token.ps1` 内部会把 `TMP`/`TEMP` 指到 `.tmp/ps-temp`——`Add-Type` 编译要可写的临时目录。
 - **别删 `%TEMP%` 下的目录**：其中一个是本会话执行器的 `--temp`，删掉后所有 bash 调用报
   `EXECUTOR_UNAVAILABLE`（写任意文件到该路径即可重建）。清理只删自建文件，不要 `rm -rf`。
 

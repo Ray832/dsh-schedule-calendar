@@ -4,7 +4,6 @@ param(
 )
 
 # Hand the GitHub token to a push without printing it.
-#
 # `git credential fill` cannot be used on this machine: the configured helper is
 # `manager`, which returns nothing non-interactively, and the `wincred` helper
 # reports no match even though the entry exists (see docs/state.md §7). The
@@ -17,6 +16,16 @@ param(
 # Delete the output file as soon as the push finishes — the file only, never the
 # directory: under DSH the session's executor temp directory is a subdirectory of
 # %TEMP% and removing it kills every later shell command.
+#
+# Add-Type compiles its helper through %TEMP%, so when that directory refuses new
+# files the script would fail before reading anything; TMP/TEMP are therefore
+# pinned to a scratch folder inside the repository.
+$repo = Split-Path -Parent $PSScriptRoot
+$scratch = Join-Path $repo '.tmp\ps-temp'
+New-Item -ItemType Directory -Path $scratch -Force | Out-Null
+$env:TMP = $scratch
+$env:TEMP = $scratch
+
 Add-Type -Namespace Dsh -Name Vault -MemberDefinition @"
 [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 public static extern bool CredRead(string target, int type, int flags, out IntPtr credential);

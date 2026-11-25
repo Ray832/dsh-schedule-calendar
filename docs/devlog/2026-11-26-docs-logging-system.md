@@ -67,7 +67,8 @@ tags: [docs, process, tooling]
    但重建后的目录**不再允许创建子目录**（`mkdir` Permission denied，正是 node 的 `EPERM mkdtemp`
    让三个测试套件立刻挂掉），ACL 与父目录一致，说明是沙箱策略而非 NTFS 权限——所以加了
    `tests/temp.mjs`：`os.tmpdir()` 不可写就回退到 `.tmp/tests`。下个会话会拿到新的临时目录，
-   这个回退只是保险。
+   这个回退只是保险。连带影响：`gh-token.ps1` 里的 `Add-Type` 也要在 `%TEMP%` 编译临时程序集，
+   于是脚本开头把 `TMP`/`TEMP` 固定到仓库 `.tmp/ps-temp`，否则取 token 会先死在编译那一步。
 
 ## 验证
 
