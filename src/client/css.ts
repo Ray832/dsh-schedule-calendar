@@ -100,12 +100,23 @@ export const CSS = `
 
 .dshc-agenda { display: flex; flex-direction: column; border: 1px solid var(--dshc-border); border-radius: var(--dshc-radius); overflow: hidden; }
 .dshc-agendarow {
-  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  border: 0; border-bottom: 1px solid var(--dshc-border); background: none;
-  text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 14px;
+  border-bottom: 1px solid var(--dshc-border);
 }
 .dshc-agendarow:last-child { border-bottom: 0; }
 .dshc-agendarow:hover { background: var(--dshc-hover); }
+.dshc-agendamain {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+  border: 0; background: none; text-align: left; cursor: pointer; padding: 6px 0;
+  font: inherit; color: inherit;
+}
+.dshc-agendacheck {
+  width: 20px; height: 20px; flex: none; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--dshc-border); background: var(--dshc-bg);
+  color: var(--dshc-accent); font-size: 12px; line-height: 1; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.dshc-agendacheck.is-on { border-color: var(--dshc-accent); background: color-mix(in srgb, var(--dshc-accent) 14%, transparent); }
 .dshc-agendatime { width: 52px; color: var(--dshc-muted); font-variant-numeric: tabular-nums; flex: none; }
 .dshc-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
 .dshc-agendatitle.is-done { text-decoration: line-through; opacity: .6; }
@@ -182,6 +193,14 @@ export const CSS = `
 .dshc-notice-title { font-size: 14px; }
 .dshc-notice-loc { color: var(--dshc-muted, #6b7280); font-size: 12px; }
 .dshc-notice-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.dshc-notice-snooze { margin-top: 4px; }
+.dshc-notice-snooze .dshc-chips { margin-top: 4px; }
+
+.dshc-reminder { display: flex; flex-direction: column; gap: 6px; }
+.dshc-remindrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.dshc-remindrow input[type='number'] { width: 64px; }
+.dshc-remindrow select { padding: 3px 6px; }
+.dshc-remindlabel, .dshc-remindunit { color: var(--dshc-muted); }
 
 .dshc-hint { color: var(--dshc-muted); font-size: 12px; margin: 4px 0 0; }
 .dshc-pre {

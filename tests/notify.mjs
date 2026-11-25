@@ -21,6 +21,7 @@ function stateWith(overrides = {}) {
     plans: [],
     settings: {
       timetableEnabled: false,
+      defaultReminder: { kind: 'short', hours: 0, minutes: 10 },
       defaultRemindBefore: 10,
       quietHours: { enabled: false, from: '23:00', to: '07:00' },
       soundEnabled: true,
@@ -32,15 +33,16 @@ function stateWith(overrides = {}) {
   }
 }
 
-/** One event at a given local stamp with a lead time. */
-function event(start, end, leads, id = 'e1') {
+/** One event at a given local stamp with a reminder tier or a legacy lead list. */
+function event(start, end, reminder, id = 'e1') {
   return {
     id,
     title: '组会',
     start,
     end,
     allDay: false,
-    remindBefore: leads,
+    reminder: Array.isArray(reminder) ? undefined : reminder,
+    remindBefore: Array.isArray(reminder) ? reminder : undefined,
     repeat: { kind: 'none' },
     source: 'manual',
     createdAt: 0,
@@ -109,9 +111,69 @@ assert.equal(daily.scan().length, 1, 'the first occurrence fires')
 clock = new Date(2026, 10, 3, 9, 0, 1).getTime()
 assert.equal(daily.scan().length, 1, 'the next day fires a second, distinct occurrence')
 
+
+// --- tiered reminders -------------------------------------------------------
+
+// A long-tier plan nudges repeatedly without any further user action.
+const longState = stateWith({
+  events: [
+    event('2026-11-20T10:00', '2026-11-20T11:00', { kind: 'long', startDays: 7, everyDays: 3 }, 'e3'),
+  ],
+})
+const longLog = join(home, 'long.json')
+clock = new Date(2026, 10, 12, 23, 59, 0).getTime()
+const ladder = new ReminderEngine({ state: () => longState, logPath: longLog, now })
+ladder.scan()
+const rungs = []
+/** Fire once at a moment and drain, so the collected rungs do not expire. */
+function rung(at, label) {
+  clock = at
+  const fired = ladder.scan()
+  assert.equal(fired.length, 1, label)
+  rungs.push(...fired.map((notice) => notice.leadMinutes))
+  assert.equal(ladder.pending().length, 1, `${label} — the page can drain it`)
+}
+
+rung(new Date(2026, 10, 13, 10, 0, 30).getTime(), 'the first rung, seven days out, fires')
+rung(new Date(2026, 10, 16, 10, 0, 30).getTime(), 'three days later the next rung fires')
+rung(new Date(2026, 10, 19, 10, 0, 30).getTime(), 'then the rung one day out')
+rung(new Date(2026, 10, 20, 10, 0, 30).getTime(), 'and the reminder on the day itself')
+assert.equal(ladder.scan().length, 0, 'the ladder is exhausted once the day has fired')
+assert.deepEqual(
+  rungs.sort((a, b) => a - b),
+  [0, 1440, 5760, 10080],
+  'each rung is its own notice: 1 day, 1 day, 4 days and 7 days out',
+)
+
+// A finished plan is not nudged any more.
+const doneState = stateWith({
+  events: [{ ...event('2026-11-05T19:00', '2026-11-05T20:00', [10], 'e4'), done: true }],
+})
+const doneLog = join(home, 'done.json')
+clock = new Date(2026, 10, 5, 18, 50, 5).getTime()
+const doneEngine = new ReminderEngine({ state: () => doneState, logPath: doneLog, now })
+assert.equal(doneEngine.scan().length, 0, 'a done event does not remind')
+
+// Snoozing longer than the notice age limit still comes back.
+const snoozeState = stateWith({ events: [event('2026-11-05T19:00', '2026-11-05T20:00', [10], 'e5')] })
+const snoozeLog = join(home, 'snooze.json')
+clock = new Date(2026, 10, 5, 18, 50, 5).getTime()
+const snoozed = new ReminderEngine({ state: () => snoozeState, logPath: snoozeLog, now })
+const due = snoozed.scan()
+assert.equal(due.length, 1)
+assert.equal(snoozed.pending().length, 1, 'the notice is shown once')
+snoozed.snooze(due[0].id, 120)
+assert.equal(snoozed.pending().length, 0, 'a snoozed notice stays hidden')
+clock = new Date(2026, 10, 5, 19, 20, 0).getTime()
+snoozed.scan()
+assert.equal(snoozed.pending().length, 0, 'still hidden an hour before the snooze target')
+clock = new Date(2026, 10, 5, 20, 51, 0).getTime()
+snoozed.scan()
+assert.equal(snoozed.pending().length, 1, 'two hours later it comes back')
+
 // The log file is valid JSON and shrinks to the retention window.
 const log = JSON.parse(await readFile(logPath, 'utf8'))
 assert.ok(Object.keys(log.fired).length >= 1, 'fired keys are persisted')
 
 await rm(home, { recursive: true, force: true })
-console.log('notify: engine OK (lead time, drain-once, restart dedupe, quiet hours, recurrence)')
+console.log('notify: engine OK (lead time, drain-once, restart dedupe, quiet hours, recurrence, repeat rungs, done events, long snooze)')

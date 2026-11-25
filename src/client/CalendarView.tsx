@@ -16,6 +16,8 @@ interface Props {
   locale: string
   onCreate(day: Date): void
   onOpen(event: CalendarEvent): void
+  /** Tick or untick one event straight from the agenda. */
+  onToggleDone(event: CalendarEvent, done: boolean): void
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * @param props - document, locale and callbacks.
  * @returns the surface.
  */
-export function CalendarView({ state, locale, onCreate, onOpen }: Props) {
+export function CalendarView({ state, locale, onCreate, onOpen, onToggleDone }: Props) {
   const t = useT()
   const today = useMemo(() => new Date(), [])
   const [view, setView] = useState<ViewMode>('month')
@@ -142,16 +144,32 @@ export function CalendarView({ state, locale, onCreate, onOpen }: Props) {
               <span>{t('点右上角「新建」添加一条，或在对话框里直接说「明天下午三点组会」。')}</span>
             </div>
           ) : (
-            (byDay.get(ymd(cursor)) ?? []).map((occurrence) => (
-              <button key={occurrence.key} type="button" className="dshc-agendarow" onClick={() => onOpen(occurrence.event)}>
-                <span className="dshc-agendatime">
-                  {occurrence.event.allDay ? t('全天') : clockOf(occurrence.event.start)}
-                </span>
-                <span className="dshc-dot" style={{ background: COLORS[occurrence.event.color ?? 'blue'] ?? COLORS.blue }} />
-                <span className={`dshc-agendatitle${occurrence.event.done === true ? ' is-done' : ''}`}>{occurrence.event.title}</span>
-                {occurrence.event.location !== undefined ? <span className="dshc-agendaloc">{occurrence.event.location}</span> : null}
-              </button>
-            ))
+            (byDay.get(ymd(cursor)) ?? []).map((occurrence) => {
+              const done = occurrence.event.done === true
+              return (
+                <div key={occurrence.key} className={`dshc-agendarow${done ? ' is-done' : ''}`}>
+                  <button
+                    type="button"
+                    className={`dshc-agendacheck${done ? ' is-on' : ''}`}
+                    role="checkbox"
+                    aria-checked={done}
+                    aria-label={done ? t('取消完成') : t('标记完成')}
+                    title={done ? t('取消完成') : t('标记完成')}
+                    onClick={() => onToggleDone(occurrence.event, !done)}
+                  >
+                    {done ? '✓' : ''}
+                  </button>
+                  <button type="button" className="dshc-agendamain" onClick={() => onOpen(occurrence.event)}>
+                    <span className="dshc-agendatime">
+                      {occurrence.event.allDay ? t('全天') : clockOf(occurrence.event.start)}
+                    </span>
+                    <span className="dshc-dot" style={{ background: COLORS[occurrence.event.color ?? 'blue'] ?? COLORS.blue }} />
+                    <span className={`dshc-agendatitle${done ? ' is-done' : ''}`}>{occurrence.event.title}</span>
+                    {occurrence.event.location !== undefined ? <span className="dshc-agendaloc">{occurrence.event.location}</span> : null}
+                  </button>
+                </div>
+              )
+            })
           )}
         </div>
       ) : null}

@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, copyFil
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { CalendarSettings, CalendarState, Course, Period, Plan, Term } from './types.js'
+import { cleanReminderPlan, reminderLeads } from './remind.js'
 
 /** Default bell schedule for a Chinese university day (12 periods). */
 export const DEFAULT_PERIODS: Period[] = [
@@ -31,6 +32,7 @@ export const DEFAULT_PERIODS: Period[] = [
 /** Settings a fresh install starts with. */
 export const DEFAULT_SETTINGS: CalendarSettings = {
   timetableEnabled: false,
+  defaultReminder: { kind: 'short', hours: 0, minutes: 10 },
   defaultRemindBefore: 10,
   quietHours: { enabled: false, from: '23:00', to: '07:00' },
   soundEnabled: true,
@@ -107,12 +109,30 @@ export function normalize(raw: unknown): CalendarState {
         .map((p) => ({ index: p.index, start: String(p.start ?? '08:00'), end: String(p.end ?? '08:45') }))
     }
   }
-  const settings: CalendarSettings = { ...base.settings, ...(typeof doc.settings === 'object' && doc.settings !== null ? doc.settings : {}) }
+  const rawSettings = (typeof doc.settings === 'object' && doc.settings !== null ? doc.settings : {}) as Partial<CalendarSettings>
+  const settings: CalendarSettings = { ...base.settings, ...rawSettings }
   settings.quietHours = { ...base.settings.quietHours, ...(settings.quietHours ?? {}) }
+  // Documents written before tiers existed only carry `defaultRemindBefore`.
+  settings.defaultReminder = cleanReminderPlan(
+    rawSettings.defaultReminder ?? { kind: 'short', hours: 0, minutes: settings.defaultRemindBefore },
+  )
+  settings.defaultRemindBefore = reminderLeads(settings.defaultReminder)[0] ?? 0
+  const events = Array.isArray(doc.events)
+    ? (doc.events as CalendarState['events'])
+        .filter((event) => event && typeof event.id === 'string')
+        .map((event) => {
+          // Only documents that already carry a tier get their lead list
+          // rewritten. A pre-tier event keeps its hand-set lead times until the
+          // user opens and saves it, so no reminder is silently lost.
+          if (event.reminder === undefined) return event
+          const reminder = cleanReminderPlan(event.reminder)
+          return { ...event, reminder, remindBefore: [...reminderLeads(reminder)].sort((a, b) => a - b) }
+        })
+    : []
   return {
     version: 1,
     term,
-    events: Array.isArray(doc.events) ? (doc.events as CalendarState['events']).filter((e) => e && typeof e.id === 'string') : [],
+    events,
     courses: Array.isArray(doc.courses) ? (doc.courses as Course[]).filter((c) => c && typeof c.id === 'string') : [],
     plans: Array.isArray(doc.plans) ? (doc.plans as Plan[]).filter((p) => p && typeof p.id === 'string') : [],
     settings,

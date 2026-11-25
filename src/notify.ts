@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { expandAll, parseStamp, stamp } from './repeat.js'
+import { MID_MAX_DAYS, eventLeads } from './remind.js'
 import type { CalendarEvent, CalendarState } from './types.js'
 
 /** One reminder waiting for or delivered to a browser page. */
@@ -178,13 +179,18 @@ export class ReminderEngine {
     this.lastScan = now
     this.prune(now)
 
-    const occurrences = expandAll(state.events, new Date(from - 24 * 60 * 60_000), new Date(now + 60 * 60_000))
+    // The window has to reach as far forward as the longest lead time, or a
+    // long-tier reminder would never find its occurrence: the nudge for an event
+    // two weeks out fires while that event is still outside a short window.
+    const occurrences = expandAll(state.events, new Date(from - 24 * 60 * 60_000), new Date(now + MID_MAX_DAYS * 24 * 60 * 60_000))
     const added: Notice[] = []
     let recorded = false
 
     for (const occurrence of occurrences) {
       const event = occurrence.event
-      const leads = (event.remindBefore ?? []).filter((lead) => Number.isFinite(lead) && lead >= 0)
+      // A finished plan needs no nudging; un-ticking it brings the reminders back.
+      if (event.done === true) continue
+      const leads = eventLeads(event)
       for (const lead of leads) {
         const fireAt = occurrence.start.getTime() - lead * 60_000
         if (fireAt > now || fireAt < from) continue
@@ -240,6 +246,9 @@ export class ReminderEngine {
 
   /**
    * Re-arm one notice after a snooze.
+   *
+   * The snooze target becomes the notice's reference time, so a long delay is
+   * not pruned by the ordinary age limit before it comes back.
    * @param id - notice id.
    * @param minutes - delay in minutes.
    * @returns the updated notice, or undefined when it is gone.
@@ -247,7 +256,9 @@ export class ReminderEngine {
   snooze(id: string, minutes: number): Notice | undefined {
     const notice = this.queue.get(id)
     if (notice === undefined) return undefined
-    notice.snoozedUntil = this.now() + Math.max(1, minutes) * 60_000
+    const target = this.now() + Math.max(1, Math.min(24 * 60, minutes)) * 60_000
+    notice.snoozedUntil = target
+    notice.firedAt = target
     this.deliveredAt.delete(id)
     return notice
   }

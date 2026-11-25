@@ -12,6 +12,8 @@
 | [0004](0004-approval-gated-writes.md) | 所有模型写入都过审批门，文案列具体条目 | Accepted |
 | [0005](0005-locale-from-ctx.md) | 客户端语言取自 `ctx.locale`，不看浏览器环境 | Accepted |
 | [0006](0006-docs-and-logging.md) | AGENTS.md + state + devlog + ADR 四层文档交接 | Accepted |
+| [0007](0007-reminder-tiers.md) | 提醒用三档表达，分钟数组只是派生 | Accepted |
+| [0008](0008-one-tool-per-intent.md) | 一个意图一个工具：新增 update / complete，不改造 add | Accepted |
 
 ## 什么时候该写一条
 

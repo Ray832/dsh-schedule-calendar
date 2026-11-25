@@ -13,6 +13,7 @@ import { parseCourses, parseEvents, ParseError, type ParsedEvent } from './ai.js
 import { fromIcs, toIcs } from './ics.js'
 import { ReminderEngine, type Notice } from './notify.js'
 import { expandAll, parseStamp } from './repeat.js'
+import { cleanReminderPlan, describePlan, planFromLeads, reminderLeads } from './remind.js'
 import { installApprovalGate, registerCalendarTools } from './tools.js'
 import { dataDir, normalize, openStore, type Store } from './store.js'
 import type { CalendarEvent, CalendarSettings, CalendarState, Course, Milestone, Plan, Repeat, Term } from './types.js'
@@ -25,6 +26,12 @@ export { ReminderEngine } from './notify.js'
 
 /** Recurrence helpers, exported so tests can pin the expansion contract. */
 export { expandAll, expandEvent, parseStamp, stamp } from './repeat.js'
+
+/** Reminder tiers, exported so tests can pin the lead-time contract. */
+export { cleanReminderPlan, describeLead, describePlan, eventLeads, planFromLeads, reminderLeads } from './remind.js'
+
+/** Document normalizer, exported so tests can pin the migration of old files. */
+export { normalize } from './store.js'
 
 /** Services this plugin needs before it can mount. */
 export const inject = ['webServer'] as const
@@ -124,9 +131,10 @@ function cleanEvent(input: unknown, existing?: CalendarEvent): CalendarEvent {
   const end = requireStamp(raw.end ?? raw.start, 'end')
   if (end < start) throw new InputError('invalid-time', 'the end must not be before the start')
   const now = Date.now()
-  const remindBefore = Array.isArray(raw.remindBefore)
-    ? [...new Set(raw.remindBefore.filter((m) => Number.isFinite(m) && m >= 0 && m <= 60 * 24 * 30))].sort((a, b) => a - b)
-    : []
+  // The tier is canonical; the flat lead list is derived from it so the engine,
+  // the ICS export and older builds never disagree with the user's choice.
+  const reminder = cleanReminderPlan(raw.reminder ?? planFromLeads(raw.remindBefore))
+  const remindBefore = [...reminderLeads(reminder)].sort((a, b) => a - b)
   return {
     id: existing?.id ?? (typeof raw.id === 'string' && raw.id !== '' ? raw.id : randomUUID()),
     title,
@@ -136,6 +144,7 @@ function cleanEvent(input: unknown, existing?: CalendarEvent): CalendarEvent {
     location: typeof raw.location === 'string' ? raw.location.slice(0, 200) : undefined,
     note: typeof raw.note === 'string' ? raw.note.slice(0, 2000) : undefined,
     color: typeof raw.color === 'string' ? raw.color.slice(0, 24) : undefined,
+    reminder,
     remindBefore,
     repeat: cleanRepeat(raw.repeat),
     done: raw.done === true,
@@ -281,6 +290,8 @@ function createRouter(store: Store, engine: ReminderEngine, context: PluginConte
         const patch = (body?.patch ?? {}) as Partial<CalendarSettings>
         const next: CalendarSettings = { ...state.settings, ...patch }
         next.quietHours = { ...state.settings.quietHours, ...(patch.quietHours ?? {}) }
+        next.defaultReminder = cleanReminderPlan(next.defaultReminder)
+        next.defaultRemindBefore = reminderLeads(next.defaultReminder)[0] ?? 0
         state.settings = next
         return state
       }),
@@ -506,7 +517,11 @@ function modelRoute(
 }
 
 /** Events inside a local date range, for the model-facing list tool. */
-function eventsInRange(state: CalendarState, from: string, to: string): Array<{ id: string; title: string; start: string; end: string; location?: string }> {
+function eventsInRange(
+  state: CalendarState,
+  from: string,
+  to: string,
+): Array<{ id: string; title: string; start: string; end: string; done: boolean; location?: string; reminder?: string }> {
   const start = parseStamp(`${from}T00:00`)
   const end = parseStamp(`${to}T23:59`)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return []
@@ -515,7 +530,11 @@ function eventsInRange(state: CalendarState, from: string, to: string): Array<{ 
     title: occurrence.event.title,
     start: `${occurrence.start.getFullYear()}-${String(occurrence.start.getMonth() + 1).padStart(2, '0')}-${String(occurrence.start.getDate()).padStart(2, '0')}T${String(occurrence.start.getHours()).padStart(2, '0')}:${String(occurrence.start.getMinutes()).padStart(2, '0')}`,
     end: `${occurrence.end.getFullYear()}-${String(occurrence.end.getMonth() + 1).padStart(2, '0')}-${String(occurrence.end.getDate()).padStart(2, '0')}T${String(occurrence.end.getHours()).padStart(2, '0')}:${String(occurrence.end.getMinutes()).padStart(2, '0')}`,
+    done: occurrence.event.done === true,
     ...(occurrence.event.location !== undefined ? { location: occurrence.event.location } : {}),
+    ...(occurrence.event.reminder !== undefined && occurrence.event.reminder.kind !== 'none'
+      ? { reminder: describePlan(occurrence.event.reminder, 'en') }
+      : {}),
   }))
 }
 
@@ -546,6 +565,33 @@ export function apply(ctx: PluginContext): void {
         return created.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
       }),
     list: (from: string, to: string) => eventsInRange(store.state, from, to),
+    update: (patches) =>
+      store.update((state) => {
+        const updated: CalendarEvent[] = []
+        for (const patch of patches) {
+          const index = state.events.findIndex((event) => event.id === patch.id)
+          if (index < 0) throw new InputError('not-found', `no event with id ${patch.id}`)
+          const existing = state.events[index]
+          // Re-sending the whole event through cleanEvent keeps every invariant
+          // (derived lead list, repeat shape) in one place.
+          const merged = cleanEvent({ ...existing, ...patch, id: patch.id }, existing)
+          state.events[index] = merged
+          updated.push(merged)
+        }
+        return updated.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
+      }),
+    complete: (ids: string[], done: boolean) =>
+      store.update((state) => {
+        const updated: CalendarEvent[] = []
+        for (const id of ids) {
+          const event = state.events.find((candidate) => candidate.id === id)
+          if (event === undefined) throw new InputError('not-found', `no event with id ${id}`)
+          event.done = done
+          event.updatedAt = Date.now()
+          updated.push(event)
+        }
+        return updated.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
+      }),
     remove: (ids: string[]) =>
       store.update((state) => {
         const wanted = new Set(ids)
@@ -559,7 +605,17 @@ export function apply(ctx: PluginContext): void {
       ids
         .map((id) => store.state.events.find((event) => event.id === id))
         .filter((event): event is CalendarEvent => event !== undefined)
-        .map((event) => ({ title: event.title, start: event.start, end: event.end })),
+        .map((event) => ({
+          id: event.id,
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          allDay: event.allDay,
+          location: event.location,
+          note: event.note,
+          reminder: event.reminder,
+          done: event.done,
+        })),
   })
 
   ctx.effect(() => engine.start(), 'dsh-schedule-calendar: reminder scan')

@@ -4,6 +4,44 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.0] — 2026-11-26
+
+### Added
+
+- **Reminder tiers.** A reminder is now a tier rather than a list of minutes:
+  - **short** — same day, `hours` 0–24 plus `minutes` 0–60, fires once;
+  - **mid** — one to fifteen days ahead, fires once;
+  - **long** — from `startDays` out, repeated every 1, 3, 5 or 7 days, and again
+    on the day itself.
+  The flat lead-minute list is derived from the tier on every save, so the ICS
+  export and a pre-tier document keep working.
+- **Mark events done by hand.** The day agenda has a checkbox per event, and the
+  editor has an "已完成" switch; both call the same `event.setDone` route the
+  reminder card already used. A finished event stops reminding.
+- **`calendar_complete`** — marks events done, or reopens them with
+  `done: false`, behind the usual approval prompt.
+- **`calendar_update`** — changes time, title, place, note, all-day flag or
+  reminder tier of an existing event by id. The prompt shows old and new values.
+- **`calendar_list` reports completion** (`done`) and a readable reminder
+  summary, and its rendered lines say `✓ done` or `☐ open`.
+- **Redesigned reminder card**: 标记完成 / 关闭提醒 / 稍后提醒, where "later"
+  opens a row of delays (5 min … 3 h) and can be picked again after each nudge.
+
+### Changed
+
+- `defaultRemindBefore` in settings is replaced by `defaultReminder` (a tier);
+  the old field is still written for compatibility.
+- Snoozing longer than the 30-minute notice window now works: the snooze target
+  becomes the notice's reference time instead of being pruned.
+- The engine scans 15 days ahead, which is what lets a long-tier ladder fire at
+  all.
+
+### Fixed
+
+- A long-tier reminder could never fire: the engine only expanded occurrences
+  starting within the next hour, so a nudge for an event two weeks away had no
+  occurrence to attach to.
+
 ## [1.2.0] — 2026-11-26
 
 ### Added

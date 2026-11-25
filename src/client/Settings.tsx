@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { CalendarSettings, CalendarState, Period, Term } from '../types.js'
 import { call } from './api.js'
 import { useT } from './i18n.js'
+import { ReminderField } from './ReminderField.js'
 import { downloadText, pickTextFile, stampedName } from './io.js'
 import { ensureNotificationPermission } from './NoticeHost.js'
 
@@ -193,19 +194,13 @@ export function SettingsPanel({ state, onClose, onSettings, onTerm, onReload }: 
                   <option value="7">{t('周日开始')}</option>
                 </select>
               </label>
-              <label className="dshc-field">
-                <span>{t('新建日程默认提前提醒')}</span>
-                <select
-                  value={String(state.settings.defaultRemindBefore)}
-                  onChange={(e) => void onSettings({ defaultRemindBefore: Number(e.target.value) })}
-                >
-                  {[0, 5, 10, 15, 30, 60].map((minutes) => (
-                    <option key={minutes} value={String(minutes)}>
-                      {minutes === 0 ? t('准时提醒') : t('{n} 分钟', { n: minutes })}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            </div>
+            <div className="dshc-field">
+              <span>{t('新建日程默认提醒')}</span>
+              <ReminderField
+                value={state.settings.defaultReminder}
+                onChange={(defaultReminder) => void onSettings({ defaultReminder })}
+              />
             </div>
             <p className="dshc-hint">{t('数据文件：')}{`<DSH_HOME>/storages/dsh-schedule-calendar/calendar.json`}</p>
           </section>

@@ -172,6 +172,13 @@ export function CalendarPage() {
     [mutate],
   )
 
+  const toggleDone = useCallback(
+    async (event: CalendarEvent, done: boolean) => {
+      await mutate('event.setDone', { id: event.id, done })
+    },
+    [mutate],
+  )
+
   const toggleMilestone = useCallback(
     async (planId: string, milestoneId: string, done: boolean) => {
       await mutate('plan.milestone', { planId, milestoneId, done })
@@ -216,6 +223,7 @@ export function CalendarPage() {
               locale={locale}
               onCreate={(day) => setEditor({ event: null, day })}
               onOpen={(event) => setEditor({ event, day: new Date() })}
+              onToggleDone={(event, done) => void toggleDone(event, done)}
             />
           </>
         ) : null}
@@ -247,7 +255,7 @@ export function CalendarPage() {
         <EventEditor
           initial={editor.event}
           day={editor.day}
-          defaultLead={state?.settings.defaultRemindBefore ?? 10}
+          defaultReminder={state?.settings.defaultReminder ?? { kind: 'short', hours: 0, minutes: 10 }}
           onCancel={() => setEditor(null)}
           onSave={saveEvent}
           onDelete={deleteEvent}

@@ -88,14 +88,35 @@ assert.deepEqual(initial.body.value.events, [])
 assert.ok(initial.body.value.term.periods.length >= 8, 'a default bell schedule must exist')
 
 const created = await call('event.save', {
-  event: { title: '高数复习', start: '2026-11-05T19:00', end: '2026-11-05T20:30', remindBefore: [10, 0], repeat: { kind: 'weekly', weekdays: [4] } },
+  event: {
+    title: '高数复习',
+    start: '2026-11-05T19:00',
+    end: '2026-11-05T20:30',
+    reminder: { kind: 'mid', days: 2 },
+    repeat: { kind: 'weekly', weekdays: [4] },
+  },
 })
 assert.equal(created.body.ok, true, 'event.save must succeed')
 assert.equal(created.body.value.events.length, 1)
 const event = created.body.value.events[0]
 assert.ok(typeof event.id === 'string' && event.id.length > 0, 'the host assigns the id')
 assert.equal(event.source, 'manual')
-assert.deepEqual(event.remindBefore, [0, 10], 'lead times are sorted')
+assert.deepEqual(event.reminder, { kind: 'mid', days: 2 }, 'the tier is stored as given')
+assert.deepEqual(event.remindBefore, [2880], 'the lead list is derived from the tier, 2 days = 2880 minutes')
+
+// A caller that only knows the old lead-minute array still works: the tier is
+// inferred and the list is rewritten from it.
+const legacy = await call('event.save', { event: { title: '旧式提醒', start: '2026-11-06T09:00', end: '2026-11-06T10:00', remindBefore: [10, 0] } })
+const legacyEvent = legacy.body.value.events.find((item) => item.title === '旧式提醒')
+assert.deepEqual(legacyEvent.reminder, { kind: 'short', hours: 0, minutes: 0 }, 'a legacy list collapses to its earliest lead')
+assert.deepEqual(legacyEvent.remindBefore, [0])
+await call('event.delete', { id: legacyEvent.id })
+
+// Ticking an event is a route of its own, which is what the agenda checkbox uses.
+const done = await call('event.setDone', { id: event.id, done: true })
+assert.equal(done.body.value.events[0].done, true, 'event.setDone marks it done')
+const undone = await call('event.setDone', { id: event.id, done: false })
+assert.equal(undone.body.value.events[0].done, false, 'and puts it back')
 
 const rejected = await call('event.save', { event: { title: '  ', start: '2026-11-05T19:00', end: '2026-11-05T20:00' } })
 assert.equal(rejected.body.ok, false)
@@ -108,9 +129,10 @@ const updated = await call('event.save', { event: { ...event, title: '高数第 
 assert.equal(updated.body.value.events[0].title, '高数第 3 章')
 assert.equal(updated.body.value.events.length, 1, 'a save with an id updates in place')
 
-const settings = await call('settings.update', { patch: { timetableEnabled: true, defaultRemindBefore: 30 } })
+const settings = await call('settings.update', { patch: { timetableEnabled: true, defaultReminder: { kind: 'short', hours: 0, minutes: 30 } } })
 assert.equal(settings.body.value.settings.timetableEnabled, true)
-assert.equal(settings.body.value.settings.defaultRemindBefore, 30)
+assert.deepEqual(settings.body.value.settings.defaultReminder, { kind: 'short', hours: 0, minutes: 30 })
+assert.equal(settings.body.value.settings.defaultRemindBefore, 30, 'the legacy minute field follows the tier')
 assert.equal(settings.body.value.settings.quietHours.enabled, false, 'nested settings survive a flat patch')
 
 const removed = await call('event.delete', { id: event.id })
@@ -217,9 +239,9 @@ const missing = await call('nope')
 assert.equal(missing.status, 404, 'an unknown method must 404')
 
 // Model-facing tools: registered through the ctx.inject scope, then executed.
-assert.equal(tools.length, 3, 'three tools register when the composition exposes a registry')
+assert.equal(tools.length, 5, 'five tools register when the composition exposes a registry')
 const toolNames = tools.map((tool) => tool.name).sort()
-assert.deepEqual(toolNames, ['calendar_add', 'calendar_delete', 'calendar_list'])
+assert.deepEqual(toolNames, ['calendar_add', 'calendar_complete', 'calendar_delete', 'calendar_list', 'calendar_update'])
 const add = tools.find((tool) => tool.name === 'calendar_add')
 const added = await add.execute({ events: [{ title: '小组讨论', start: '2026-11-09T14:00', end: '2026-11-09T15:00', remindBefore: [5] }] }, {})
 assert.equal(added.created.length, 1)

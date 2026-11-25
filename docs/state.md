@@ -3,10 +3,10 @@
 > 这是**覆盖式**更新的现状快照，不是历史。历史在 `docs/devlog/`，设计理由在 `docs/decisions/`。
 > 每个会话开始读这一页就够开工；改动完成后必须回来更新它。
 
-- 当前版本：**1.2.0**
+- 当前版本：**1.3.0**
 - 最后更新：2026-11-26（Asia/Shanghai）
 - 状态：**可发布、可用**。宿主与客户端都已在本机 DSH 加载并实测通过。
-- 一句话：给 DSH 加日历 + 提醒 + 课表 + 长期规划，并让模型能经审批写入日程。
+- 一句话：给 DSH 加日历 + 三档提醒 + 课表 + 长期规划，并让模型经审批读写日程、标记完成。
 
 ---
 
@@ -36,9 +36,10 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 | 文件 | 行数 | 职责 |
 |---|---|---|
 | `src/index.ts` | 605 | 插件入口：store/engine/router/tools/审批门/24 条路由 |
-| `src/tools.ts` | 400 | 三个工具定义（add/list/delete）+ `registerCalendarTools` + `installApprovalGate` |
 | `src/tool-schema.ts` | 204 | 工具 author DSL → raw JSON Schema 编译器 + 校验 |
-| `src/notify.ts` | 279 | `ReminderEngine`：15s tick、12h 回看、30min 过期、静音时段 |
+| `src/remind.ts` | 178 | 提醒档位：档位→提前分钟数展开、钳制、旧数据迁移、文案 |
+| `src/tools.ts` | 742 | 五个工具 + 注册 + 审批门（含 update 的新旧值对比） |
+| `src/notify.ts` | 290 | `ReminderEngine`：15s tick、**向前看 15 天**、12h 回看、30min 过期、静音时段 |
 | `src/ai.ts` | 258 | 一句话解析：`parseEvents` / `parseCourses`（纯规则，不调模型） |
 | `src/ics.ts` | 219 | ICS 导入导出 |
 | `src/store.ts` | 211 | 单文档存储、`revision` 计数器、原子写 |
@@ -46,13 +47,14 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 | `src/repeat.ts` | 137 | 重复展开 `expandEvent` / `expandAll`，occurrence key `${eventId}@${stamp}` |
 
 客户端半侧（`src/client/`）：`index.tsx`（注册）· `Page.tsx`（外壳 + 6s 轮询 `state.rev`）·
-`CalendarView` · `EventEditor` · `Timetable`（最大，513 行）· `Plan` · `Settings` · `QuickAdd` ·
-`NoticeHost`（提醒浮层）· `i18n.ts`（289 行，165 条词条）· `api.ts` · `dates.ts` · `csv.ts` · `io.ts` · `css.ts` · `Icon.tsx`。
+`CalendarView`（含议程行勾选完成）· `EventEditor` · `ReminderField`（三档控件，编辑器/设置/提醒卡共用）·
+`Timetable`（最大，513 行）· `Plan` · `Settings` · `QuickAdd` · `NoticeHost`（完成/关闭/稍后提醒）·
+`i18n.ts`（179 条词条）· `api.ts` · `dates.ts` · `csv.ts` · `io.ts` · `css.ts` · `Icon.tsx`。
 
 配套：`scripts/wrap.mjs`（给 client bundle 套 loader 壳）、`scripts/doctor.mjs`（11 项自检）、
 `scripts/docs-check.mjs`（交接文档一致性）、`scripts/log.mjs`（日志骨架）、
 `scripts/gh-token.ps1`（从 Windows 凭据库取推送 token）、
-`tests/` 六个套件（smoke/tools/notify/repeat/client/i18n）。
+`tests/` 七个套件（smoke/tools/notify/repeat/**remind**/client/i18n）。
 
 ---
 
@@ -69,11 +71,16 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 
 ## 4. 工具与审批（v1.1–v1.2 的核心）
 
-三个工具注册在**全局层**，所有 agent 都能看到：
+五个工具注册在**全局层**，所有 agent 都能看到（只有 list 免审批）：
 
-- `calendar_add` — 写事件，必须过审批
-- `calendar_list` — 读事件，返回 id（删改的前提）
-- `calendar_delete` — 按 id 删，必须过审批
+- `calendar_add` — 写事件
+- `calendar_list` — 读事件，返回 id + 完成状态 + 提醒摘要
+- `calendar_update` — 按 id 改时间/标题/地点/备注/全天/提醒档位（审批框显示新旧值）
+- `calendar_complete` — 标记完成 / `done: false` 取消完成
+- `calendar_delete` — 按 id 删
+
+> 为什么 update/complete 不并进 add：add 要求 title+start，把"按 id 打补丁"塞进去会诱导模型重发整条
+> 事件（从而重复创建）；而且一个意图一个工具，description 才能各自写清触发词。见 ADR 0007/0008。
 
 链路：`tools/pre-execute`（waterfall）→ 返回 `{kind:'ask', reason, displayReason}` →
 `approval.request()` → `allowed-once` / `rejected` / `cancelled` / `unavailable`。
@@ -91,6 +98,10 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 - v1.1.0 — 模型可在任意 session 经审批写入日程（`calendar_add` / `calendar_list`）。
 - v1.2.0 — `calendar_delete`；`calendar_list` 返回 id 并明确"何时该调用"。
 - 2026-11-26 — 建立日志/交接体系（本文件、`AGENTS.md`、`docs/devlog/`、`docs/decisions/`、`docs:check`）。
+- v1.3.0 — 提醒改为**三档**（短期时分 / 中期 1-15 天 / 长期每 1/3/5/7 天）；
+  日程可**手动标记完成**（议程勾选 + 编辑器开关），完成的事件不再提醒；
+  新增 `calendar_update` / `calendar_complete`，`calendar_list` 返回 `done`；
+  提醒卡改为「标记完成 / 关闭提醒 / 稍后提醒（多档）」。
 
 ---
 
@@ -100,7 +111,9 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
   解析早已完成，**是用户还没决定要不要导入**。
 - [ ] GitHub 上为 v1.1.0 / v1.2.0 打 tag 与 Release（用户未要求，别自作主张）。
 - [ ] 发布到 npm（未要求）。
-- [ ] 工具层目前只有 add/list/delete；`calendar_update`、`calendar_search` 未做。
+- [ ] `calendar_search`（按关键词找日程）未做；目前只能 list 后由模型自己筛。
+- [ ] 重复事件的 `done` 是整条共享的：勾掉一场等于勾掉整条。若要做"只完成这一场"，需要 occurrence 级状态，
+      属于数据模型变更，先写 ADR 再动。
 - [ ] 课表与日历仍独立；若要联动需新 ADR。
 
 ---
@@ -119,7 +132,11 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
    换成 `wincred` 也匹配不到，尽管 `cmdkey /list` 里确实有 `LegacyGeneric:target=git:https://github.com`（user Ray832）。
    现用 `scripts/gh-token.ps1`（CredRead P/Invoke）直读凭据库，token 只落临时文件、用完即删。
    另：沙箱禁止 node 子进程，`execFileSync('git')` 会 `EPERM spawn`——所以推送必须走 bash，不能包装成 npm script。
-9. **不要删 `%TEMP%` 下的目录**：DSH 会话执行器的 `--temp` 就在里面，删掉之后所有 bash 调用报
+9. **提醒引擎的扫描窗口必须覆盖最长档位**：原来只 `now + 1h`，导致 7 天档的 occurrence 根本不在窗口里，
+   提醒永远不会触发（v1.3.0 修）。窗口现在是 `now + 15 天`，改档位上限时要同步改这里。
+10. **提醒有两个字段**：`reminder`（档位，真实来源）与 `remindBefore`（派生分钟数组，给 ICS/引擎用）。
+    只有 `cleanEvent` 会写两者；手改 `remindBefore` 会在下次保存时被覆盖。旧文档没有 `reminder` 时保留原数组不迁移。
+11. **不要删 `%TEMP%` 下的目录**：DSH 会话执行器的 `--temp` 就在里面，删掉之后所有 bash 调用报
    `EXECUTOR_UNAVAILABLE`；用 `write` 往该路径写任意文件即可重建目录恢复。清理只删自建文件。
    重建出的目录**不让创建子目录**（`mkdir` Permission denied，ACL 却和父目录一致 → 沙箱策略），
    所以 `tests/temp.mjs` 在 `os.tmpdir()` 不可写时回退到 `.tmp/tests`。

@@ -17,6 +17,32 @@ export interface Repeat {
   until?: string
 }
 
+/** Which reminder tier an event carries. */
+export type ReminderKind = 'none' | 'short' | 'mid' | 'long'
+
+/**
+ * Reminder tier attached to an event.
+ *
+ * Three tiers cover the three horizons a user actually plans on:
+ * `short` for the same day (hours + minutes), `mid` for a week or two
+ * (`days`), and `long` for something weeks away, where the point is to be
+ * nudged repeatedly (`startDays` then every `everyDays`).
+ * The stored lead times are derived from this by `reminderLeads`.
+ */
+export interface ReminderPlan {
+  kind: ReminderKind
+  /** short tier: whole hours before the start, 0–24. */
+  hours?: number
+  /** short tier: extra minutes on top of `hours`, 0–60. */
+  minutes?: number
+  /** mid tier: days before the start, 1–15. */
+  days?: number
+  /** long tier: first nudge this many days before, 1–15. */
+  startDays?: number
+  /** long tier: repeat interval in days, one of 1, 3, 5, 7. */
+  everyDays?: number
+}
+
 /** One calendar entry. Times are local wall-clock `YYYY-MM-DDTHH:mm` strings. */
 export interface CalendarEvent {
   id: string
@@ -28,7 +54,13 @@ export interface CalendarEvent {
   note?: string
   /** Palette key, e.g. `blue`, `green`, `amber`, `rose`, `violet`, `slate`. */
   color?: string
-  /** Minutes before the start to remind at, ascending. `0` means at start. */
+  /** The reminder tier the user picked. */
+  reminder?: ReminderPlan
+  /**
+   * Lead times in minutes, ascending, derived from `reminder` on every save.
+   * Kept for ICS export and for documents written before tiers existed; never
+   * edit it by hand.
+   */
   remindBefore?: number[]
   repeat?: Repeat
   done?: boolean
@@ -103,7 +135,12 @@ export interface Plan {
 export interface CalendarSettings {
   /** Whether the timetable page and its data are enabled at all. */
   timetableEnabled: boolean
-  /** Default lead time in minutes for new events. */
+  /** Reminder tier applied to a new event. */
+  defaultReminder: ReminderPlan
+  /**
+   * Legacy single default lead in minutes. Derived from `defaultReminder` on
+   * every settings write so an older build still finds a number.
+   */
   defaultRemindBefore: number
   /** Minutes kept quiet: no popup or sound between these, 24h clock. */
   quietHours: { enabled: boolean; from: string; to: string }

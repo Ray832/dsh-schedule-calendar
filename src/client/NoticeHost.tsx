@@ -8,9 +8,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CalendarSettings, CalendarState } from '../types.js'
+import { describeLead } from '../remind.js'
 import { call } from './api.js'
 import { clockOf } from './dates.js'
-import { t as translate, useT } from './i18n.js'
+import { language, t as translate, useT } from './i18n.js'
+
+/** Delay choices offered when the user asks to be nudged again. */
+const SNOOZE_MINUTES = [5, 10, 30, 60, 180]
 
 /** One notice as the host sends it. */
 interface Notice {
@@ -133,12 +137,15 @@ export function NoticeHost() {
     }
   }, [loadSettings, poll])
 
+  const [snoozeFor, setSnoozeFor] = useState<string | null>(null)
+
   const dismiss = useCallback((id: string) => {
     setNotices((current) => current.filter((notice) => notice.id !== id))
     void call('notify.ack', { id }).catch(() => {})
   }, [])
 
   const snooze = useCallback((id: string, minutes: number) => {
+    setSnoozeFor(null)
     setNotices((current) => current.filter((notice) => notice.id !== id))
     void call('notify.snooze', { id, minutes }).catch(() => {})
   }, [])
@@ -159,7 +166,7 @@ export function NoticeHost() {
             <span className="dshc-notice-kind">{notice.missed === true ? t('错过的提醒') : t('日程提醒')}</span>
             <span className="dshc-notice-time">
               {notice.allDay ? t('全天') : clockOf(notice.start)}
-              {notice.leadMinutes > 0 ? ` · ${t('提前 {n} 分钟', { n: notice.leadMinutes })}` : ''}
+              {` · ${describeLead(notice.leadMinutes, language() === 'en' ? 'en' : 'zh')}`}
             </span>
             <button type="button" className="dshc-notice-x" aria-label={t('关闭')} onClick={() => dismiss(notice.id)}>
               ✕
@@ -169,15 +176,32 @@ export function NoticeHost() {
           {notice.location !== undefined ? <span className="dshc-notice-loc">{notice.location}</span> : null}
           <div className="dshc-notice-actions">
             <button type="button" className="dshc-btn is-primary" onClick={() => complete(notice)}>
-              {t('完成')}
+              {t('标记完成')}
             </button>
-            <button type="button" className="dshc-btn" onClick={() => snooze(notice.id, 5)}>
-              {t('5 分钟后')}
+            <button type="button" className="dshc-btn" onClick={() => dismiss(notice.id)}>
+              {t('关闭提醒')}
             </button>
-            <button type="button" className="dshc-btn" onClick={() => snooze(notice.id, 10)}>
-              {t('10 分钟后')}
+            <button
+              type="button"
+              className="dshc-btn"
+              aria-expanded={snoozeFor === notice.id}
+              onClick={() => setSnoozeFor(snoozeFor === notice.id ? null : notice.id)}
+            >
+              {t('稍后提醒')}
             </button>
           </div>
+          {snoozeFor === notice.id ? (
+            <div className="dshc-notice-snooze">
+              <span className="dshc-hint">{t('选一档，到点再提醒我')}</span>
+              <div className="dshc-chips">
+                {SNOOZE_MINUTES.map((minutes) => (
+                  <button key={minutes} type="button" className="dshc-chip" onClick={() => snooze(notice.id, minutes)}>
+                    {t('{n} 分钟后', { n: minutes })}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </article>
       ))}
     </div>

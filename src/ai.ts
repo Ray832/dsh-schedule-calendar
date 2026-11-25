@@ -7,7 +7,8 @@
  * so a model can never write something the UI could not.
  */
 
-import type { Parity, Repeat, RepeatKind } from './types.js'
+import type { Parity, ReminderPlan, Repeat, RepeatKind } from './types.js'
+import { cleanReminderPlan, planFromLeads, reminderLeads } from './remind.js'
 
 /** The subset of the DSH model service this plugin uses. */
 interface LlmService {
@@ -27,6 +28,8 @@ export interface ParsedEvent {
   end: string
   allDay: boolean
   location?: string
+  /** Tier the model picked; the lead list below is derived from it. */
+  reminder: ReminderPlan
   remindBefore: number[]
   repeat: Repeat
 }
@@ -123,9 +126,11 @@ export function normalizeEventRow(raw: unknown): ParsedEvent | null {
   if (title === '' || start === null) return null
   const end = normalizeStamp(row.end) ?? start
   const allDay = row.allDay === true || start.endsWith('T00:00')
-  const leads = Array.isArray(row.remindBefore)
-    ? row.remindBefore.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v >= 0).slice(0, 5)
-    : []
+  // A tier is preferred; older prompts and callers still send a lead list.
+  const reminder =
+    row.reminder === undefined
+      ? planFromLeads(Array.isArray(row.remindBefore) ? row.remindBefore.map((v) => Number(v)) : [])
+      : cleanReminderPlan(row.reminder)
   const rawRepeat = (row.repeat ?? {}) as Record<string, unknown>
   const kind = String(rawRepeat.kind ?? 'none')
   const allowed: RepeatKind[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'biweekly']
@@ -141,7 +146,8 @@ export function normalizeEventRow(raw: unknown): ParsedEvent | null {
     end: end < start ? start : end,
     allDay,
     ...(typeof row.location === 'string' && row.location.trim() !== '' ? { location: row.location.trim().slice(0, 200) } : {}),
-    remindBefore: [...new Set(leads)].sort((a, b) => a - b),
+    reminder,
+    remindBefore: [...reminderLeads(reminder)].sort((a, b) => a - b),
     repeat,
   }
 }
@@ -154,7 +160,12 @@ const EVENT_SYSTEM = `你是一个日历解析器，只输出 JSON，不要任�
 - end: "YYYY-MM-DDTHH:mm"，缺省时按 1 小时
 - allDay: 布尔，只有「全天」「一整天」才为 true
 - location: 字符串，可选，没有就不写
-- remindBefore: 分钟数数组，例如 [10]；用户说「提前十分钟」就是 [10]，没说就写 [10]
+- reminder: 提醒档位对象，按日程远近选一档：
+  · 短期（当天）：{"kind":"short","hours":小时0-24,"minutes":分钟0-60}，「提前半小时」= hours 0, minutes 30
+  · 中期（一两周内）：{"kind":"mid","days":天数1-15}，「提前三天」= days 3
+  · 长期（更远）：{"kind":"long","startDays":起点天数1-15,"everyDays":间隔1/3/5/7}，
+    「从现在起每三天提醒一次」= startDays 15, everyDays 3
+  · 用户说不用提醒：{"kind":"none"}；没说就按短期 {"kind":"short","hours":0,"minutes":10}
 - repeat: 对象，{"kind":"none"}；每天用 daily，每周用 weekly 并给 weekdays（1=周一…7=周日），
   工作日用 weekdays，每月用 monthly，每两周用 biweekly
 规则：相对时间（明天、下周三、今晚）都要换算成绝对日期；不确定就取最接近的未来时间；没有时间就取次日 09:00。`

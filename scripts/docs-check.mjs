@@ -24,9 +24,11 @@ function check(label, ok, detail = '') {
 function warn(text) {
   warnings.push(text)
 }
-/** Read a file, or null when it does not exist. */
+/** Read a file with line endings normalized, or null when it does not exist. */
 function read(path) {
-  return existsSync(path) ? readFileSync(path, 'utf8') : null
+  // CRLF is what a Windows editor (and some tooling) writes; structure checks
+  // should not care which one a file happens to use.
+  return existsSync(path) ? readFileSync(path, 'utf8').replaceAll('\r\n', '\n') : null
 }
 
 const statePath = join(root, 'docs', 'state.md')
@@ -70,7 +72,7 @@ const entries = existsSync(devlogDir)
   : []
 
 for (const name of entries) {
-  const text = readFileSync(join(devlogDir, name), 'utf8')
+  const text = read(join(devlogDir, name)) ?? ''
   const missing = REQUIRED_SECTIONS.filter((heading) => !text.includes(heading))
   check(`devlog ${name}: required sections`, missing.length === 0, missing.join(', '))
 
@@ -110,7 +112,7 @@ const adrs = existsSync(decisionsDir)
 check('docs/decisions holds at least one ADR', adrs.length > 0, `${adrs.length} found`)
 
 for (const name of adrs) {
-  const text = readFileSync(join(decisionsDir, name), 'utf8')
+  const text = read(join(decisionsDir, name)) ?? ''
   const missing = ['## 背景', '## 决定', '## 后果'].filter((heading) => !text.includes(heading))
   check(`ADR ${name}: required sections`, missing.length === 0, missing.join(', '))
   check(`ADR ${name}: status line`, /状态[：:]\s*(Proposed|Accepted|Superseded)/.test(text))

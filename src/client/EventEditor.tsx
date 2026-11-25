@@ -1,8 +1,10 @@
 /** Create/edit dialog for one event. */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CalendarEvent, Repeat, RepeatKind } from '../types.js'
+import type { CalendarEvent, ReminderPlan, Repeat, RepeatKind } from '../types.js'
+import { planFromLeads } from '../remind.js'
 import { useT, language } from './i18n.js'
+import { ReminderField } from './ReminderField.js'
 
 /** Palette offered to the user. */
 export const COLORS: Record<string, string> = {
@@ -13,9 +15,6 @@ export const COLORS: Record<string, string> = {
   violet: '#8b5cf6',
   slate: '#64748b',
 }
-
-/** Lead times offered as checkboxes, in minutes. */
-const LEADS = [0, 5, 10, 30, 60]
 
 /** Repeat choices in display order. */
 const REPEATS: Array<{ kind: RepeatKind; label: string }> = [
@@ -40,7 +39,8 @@ interface Draft {
   location: string
   note: string
   color: string
-  leads: number[]
+  reminder: ReminderPlan
+  done: boolean
   repeat: RepeatKind
   weekdays: number[]
   until: string
@@ -68,7 +68,8 @@ function draftOf(initial: CalendarEvent | null, day: Date): Draft {
       location: '',
       note: '',
       color: 'blue',
-      leads: [10],
+      reminder: { kind: 'short', hours: 0, minutes: 10 },
+      done: false,
       repeat: 'none',
       weekdays: [],
       until: '',
@@ -86,7 +87,8 @@ function draftOf(initial: CalendarEvent | null, day: Date): Draft {
     location: initial.location ?? '',
     note: initial.note ?? '',
     color: initial.color ?? 'blue',
-    leads: initial.remindBefore ?? [],
+    reminder: initial.reminder ?? planFromLeads(initial.remindBefore),
+    done: initial.done === true,
     repeat: repeat.kind,
     weekdays: repeat.weekdays ?? [],
     until: repeat.until ?? '',
@@ -97,8 +99,8 @@ function draftOf(initial: CalendarEvent | null, day: Date): Draft {
 interface EditorProps {
   initial: CalendarEvent | null
   day: Date
-  /** Default lead time applied to a fresh event. */
-  defaultLead?: number
+  /** Reminder tier applied to a fresh event. */
+  defaultReminder?: ReminderPlan
   onCancel(): void
   onSave(event: Partial<CalendarEvent>): void
   onDelete?(id: string): void
@@ -109,11 +111,11 @@ interface EditorProps {
  * @param props - initial value and callbacks.
  * @returns the dialog.
  */
-export function EventEditor({ initial, day, defaultLead = 10, onCancel, onSave, onDelete }: EditorProps) {
+export function EventEditor({ initial, day, defaultReminder, onCancel, onSave, onDelete }: EditorProps) {
   const t = useT()
   const [draft, setDraft] = useState<Draft>(() => {
     const base = draftOf(initial, day)
-    return initial === null ? { ...base, leads: [defaultLead] } : base
+    return initial === null && defaultReminder !== undefined ? { ...base, reminder: defaultReminder } : base
   })
   const [error, setError] = useState<string | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -161,7 +163,8 @@ export function EventEditor({ initial, day, defaultLead = 10, onCancel, onSave, 
       location: draft.location.trim() === '' ? undefined : draft.location.trim(),
       note: draft.note.trim() === '' ? undefined : draft.note,
       color: draft.color,
-      remindBefore: draft.leads,
+      reminder: draft.reminder,
+      done: draft.done,
       repeat,
       source: initial?.source ?? 'manual',
     })
@@ -221,24 +224,14 @@ export function EventEditor({ initial, day, defaultLead = 10, onCancel, onSave, 
           </label>
           <div className="dshc-field">
             <span>{t('提前提醒')}</span>
-            <div className="dshc-chips">
-              {LEADS.map((lead) => (
-                <button
-                  key={lead}
-                  type="button"
-                  className={`dshc-chip${draft.leads.includes(lead) ? ' is-on' : ''}`}
-                  aria-pressed={draft.leads.includes(lead)}
-                  onClick={() =>
-                    patch({
-                      leads: draft.leads.includes(lead) ? draft.leads.filter((v) => v !== lead) : [...draft.leads, lead].sort((a, b) => a - b),
-                    })
-                  }
-                >
-                  {lead === 0 ? t('准时') : t('{n} 分钟', { n: lead })}
-                </button>
-              ))}
-            </div>
+            <ReminderField value={draft.reminder} onChange={(reminder) => patch({ reminder })} />
           </div>
+          {initial !== null ? (
+            <label className="dshc-check">
+              <input type="checkbox" checked={draft.done} onChange={(e) => patch({ done: e.target.checked })} />
+              <span>{t('已完成')}</span>
+            </label>
+          ) : null}
           <div className="dshc-row">
             <label className="dshc-field">
               <span>{t('重复')}</span>
