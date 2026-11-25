@@ -217,9 +217,9 @@ const missing = await call('nope')
 assert.equal(missing.status, 404, 'an unknown method must 404')
 
 // Model-facing tools: registered through the ctx.inject scope, then executed.
-assert.equal(tools.length, 2, 'two tools register when the composition exposes a registry')
+assert.equal(tools.length, 3, 'three tools register when the composition exposes a registry')
 const toolNames = tools.map((tool) => tool.name).sort()
-assert.deepEqual(toolNames, ['calendar_add', 'calendar_list'])
+assert.deepEqual(toolNames, ['calendar_add', 'calendar_delete', 'calendar_list'])
 const add = tools.find((tool) => tool.name === 'calendar_add')
 const added = await add.execute({ events: [{ title: '小组讨论', start: '2026-11-09T14:00', end: '2026-11-09T15:00', remindBefore: [5] }] }, {})
 assert.equal(added.created.length, 1)

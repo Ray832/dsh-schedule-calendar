@@ -506,11 +506,12 @@ function modelRoute(
 }
 
 /** Events inside a local date range, for the model-facing list tool. */
-function eventsInRange(state: CalendarState, from: string, to: string): Array<{ title: string; start: string; end: string; location?: string }> {
+function eventsInRange(state: CalendarState, from: string, to: string): Array<{ id: string; title: string; start: string; end: string; location?: string }> {
   const start = parseStamp(`${from}T00:00`)
   const end = parseStamp(`${to}T23:59`)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return []
   return expandAll(state.events, start, end).map((occurrence) => ({
+    id: occurrence.event.id,
     title: occurrence.event.title,
     start: `${occurrence.start.getFullYear()}-${String(occurrence.start.getMonth() + 1).padStart(2, '0')}-${String(occurrence.start.getDate()).padStart(2, '0')}T${String(occurrence.start.getHours()).padStart(2, '0')}:${String(occurrence.start.getMinutes()).padStart(2, '0')}`,
     end: `${occurrence.end.getFullYear()}-${String(occurrence.end.getMonth() + 1).padStart(2, '0')}-${String(occurrence.end.getDate()).padStart(2, '0')}T${String(occurrence.end.getHours()).padStart(2, '0')}:${String(occurrence.end.getMinutes()).padStart(2, '0')}`,
@@ -545,8 +546,21 @@ export function apply(ctx: PluginContext): void {
         return created.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
       }),
     list: (from: string, to: string) => eventsInRange(store.state, from, to),
+    remove: (ids: string[]) =>
+      store.update((state) => {
+        const wanted = new Set(ids)
+        const removed = state.events.filter((event) => wanted.has(event.id))
+        state.events = state.events.filter((event) => !wanted.has(event.id))
+        return removed.map((event) => ({ id: event.id, title: event.title, start: event.start, end: event.end }))
+      }),
   })
-  installApprovalGate(ctx)
+  installApprovalGate(ctx, {
+    lookup: (ids: string[]) =>
+      ids
+        .map((id) => store.state.events.find((event) => event.id === id))
+        .filter((event): event is CalendarEvent => event !== undefined)
+        .map((event) => ({ title: event.title, start: event.start, end: event.end })),
+  })
 
   ctx.effect(() => engine.start(), 'dsh-schedule-calendar: reminder scan')
 

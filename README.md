@@ -57,18 +57,24 @@ half has ever mounted.
 
 ### Chat tools
 
-In any session, the model can schedule for you without the panel:
+In any session, the model can read and change your calendar without the panel:
 
+- **`calendar_list`** — reads events in a date range, including every occurrence
+  of a repeating event, and returns each event's id. The model calls it whenever
+  the answer depends on what you already have scheduled — "what's coming up",
+  "am I free Thursday" — instead of answering from memory.
 - **`calendar_add`** — writes one or more events. It first agrees the events with
   you in conversation, and then the call still stops at an approval prompt
   before anything is written. Declining leaves the calendar untouched.
-- **`calendar_list`** — reads events in a date range, including occurrences of
-  repeating events, so the model can answer "what's on next week".
+- **`calendar_delete`** — removes events by the ids `calendar_list` returned, and
+  is gated the same way; the prompt names the events that will disappear.
+  Deleting removes the whole stored event, so a repeating event loses every
+  occurrence.
 
-Both are registered in the global tool layer, so every agent inherits them, and
-the panel reloads itself when a tool writes (it polls a cheap revision stamp).
-The tools need the profile's approval service; a composition without one denies
-`calendar_add` rather than writing silently.
+All three are registered in the global tool layer, so every agent inherits them,
+and the panel reloads itself when a tool writes (it polls a cheap revision
+stamp). The writing tools need the profile's approval service; a composition
+without one denies the call rather than changing anything silently.
 
 ## Configuration
 

@@ -4,6 +4,24 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.2.0] — 2026-11-26
+
+### Added
+
+- **`calendar_delete`** — removes events by id, gated by the same approval seam
+  as `calendar_add`; the prompt resolves the ids and names the events that will
+  disappear, so a wrong id cannot delete something unannounced. Deleting removes
+  the whole stored event, and the tool description says so.
+- **`calendar_list` returns ids**, which is what makes the delete flow possible,
+  and its rendered output ends each line with `[id: …]`.
+
+### Changed
+
+- `calendar_list` now states when to call it — "what is coming up", "am I free on
+  Thursday", any question whose answer depends on the stored calendar — so the
+  model reads the calendar instead of answering from memory. Its `from`/`to`
+  descriptions suggest today and about a month ahead for open-ended questions.
+
 ## [1.1.0] — 2026-11-25
 
 ### Added

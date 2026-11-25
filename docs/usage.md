@@ -25,22 +25,30 @@ lab report due next Wednesday (all day)
 Press Parse; the model returns candidates and nothing is written until you
 confirm. If it looks wrong, rephrase and parse again.
 
-## Scheduling from a conversation
+## Reading and changing the calendar from a conversation
 
 You do not have to come back to the panel. Just say it in chat:
 
 ```
+what do I have coming up?
+anything left this week?
 put the group meeting next Wednesday at 2pm in my calendar, remind me 10 minutes before
 split the final revision into three stages two weeks apart and put them in the calendar
+delete next Wednesday's meeting
 ```
 
-The model restates what it is about to write, then an approval prompt lists the
-titles and times. Nothing is written unless you allow it; declining or closing
-the prompt leaves the calendar untouched. A few seconds later the calendar page
-reloads itself.
+**Asking about plans** — the model reads with `calendar_list` (every occurrence
+of repeating events) and answers from what is stored. For "coming up" it uses
+today as the start and about a month as the end.
 
-You can also ask "what's on next week" — the model reads it with
-`calendar_list`, including every occurrence of repeating events.
+**Adding** — the model restates what it is about to write, then an approval
+prompt lists the titles and times. Nothing is written unless you allow it.
+
+**Deleting** — the model lists first to get the ids, then an approval prompt
+names the events that will disappear. Deleting removes the whole stored event,
+so a repeating event loses every occurrence, and it cannot be undone.
+
+A few seconds after a write the calendar page reloads itself.
 
 ## Reminders
 

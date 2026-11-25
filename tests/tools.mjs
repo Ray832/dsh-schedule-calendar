@@ -51,7 +51,7 @@ plugin.apply(ctx)
 
 // --- registration -----------------------------------------------------------
 
-assert.deepEqual([...registered.keys()].sort(), ['calendar_add', 'calendar_list'], 'both tools register')
+assert.deepEqual([...registered.keys()].sort(), ['calendar_add', 'calendar_delete', 'calendar_list'], 'all three tools register')
 assert.equal(typeof preExecute, 'function', 'the approval gate installs a pre-execute listener')
 
 /**
@@ -95,7 +95,12 @@ for (const [name, definition] of registered) {
 
 const add = registered.get('calendar_add')
 const list = registered.get('calendar_list')
+const del = registered.get('calendar_delete')
 assert.match(add.description, /after the user has agreed/i, 'the write tool tells the model to agree first')
+assert.match(list.description, /what is coming up/i, 'the list tool names the questions it answers')
+assert.match(list.description, /ids that calendar_delete needs/i, 'the list tool points at the delete flow')
+assert.match(del.description, /calendar_list first/i, 'the delete tool says where ids come from')
+assert.match(del.description, /cannot be undone/i, 'the delete tool warns about permanence')
 
 // --- execution --------------------------------------------------------------
 
@@ -112,10 +117,15 @@ assert.match(rendered[0].text, /2026-11-26 14:00/, 'times render readably')
 const listed = await list.execute({ from: '2026-11-26', to: '2026-11-26' }, {})
 assert.equal(listed.events.length, 1)
 assert.equal(listed.events[0].title, '小组讨论')
+assert.equal(listed.events[0].id, created.created[0].id, 'the list hands back ids so a delete can name one')
+
+const listText = list.output.render({}, listed)[0].text
+assert.match(listText, /\[id: /, 'the rendered list exposes the id')
 
 // Malformed input fails with an actionable message instead of writing.
 assert.throws(() => add.execute({ events: [{ title: '', start: '2026-11-26T14:00' }] }, {}), /events\[0\]/)
 assert.throws(() => list.execute({ from: 'tomorrow', to: '2026-11-27' }, {}), /YYYY-MM-DD/)
+assert.throws(() => del.execute({ ids: [] }, {}), /non-empty array/)
 
 // --- approval gate ----------------------------------------------------------
 
@@ -125,6 +135,18 @@ assert.equal(ask.kind, 'ask', 'a write pauses for approval')
 assert.match(ask.displayReason, /组会/, 'the prompt names the event')
 assert.match(ask.displayReason, /2026-11-26 15:00/, 'the prompt names the time')
 assert.match(ask.reason, /1 event/, 'the logged reason counts the events')
+
+// A delete names what disappears, resolved from the document, not from the id.
+const deleteAsk = preExecute({ name: 'calendar_delete', arguments: { ids: [created.created[0].id] } }, next)
+assert.equal(deleteAsk.kind, 'ask', 'a delete pauses for approval')
+assert.match(deleteAsk.displayReason, /删除日程/, 'the prompt says it is a delete')
+assert.match(deleteAsk.displayReason, /小组讨论/, 'the prompt names the event about to disappear')
+assert.match(deleteAsk.reason, /Delete 1 event/, 'the logged reason says delete')
+
+// An unknown id still asks, showing the raw id rather than failing open.
+const unknownAsk = preExecute({ name: 'calendar_delete', arguments: { ids: ['no-such-id'] } }, next)
+assert.equal(unknownAsk.kind, 'ask')
+assert.match(unknownAsk.displayReason, /no-such-id/)
 
 const passthrough = preExecute({ name: 'calendar_list', arguments: {} }, next)
 assert.equal(passthrough, 'delegated', 'a read is not gated')
@@ -144,5 +166,18 @@ const batch = preExecute(
 assert.match(batch.displayReason, /9/)
 assert.match(batch.displayReason, /…4 more/, 'the prompt truncates the list')
 
+// --- delete ----------------------------------------------------------------
+
+const removed = del.execute({ ids: [created.created[0].id] }, {})
+assert.equal(removed.deleted.length, 1)
+assert.equal(removed.deleted[0].title, '小组讨论')
+assert.match(del.output.render({}, removed)[0].text, /Deleted: 小组讨论/)
+
+const afterDelete = list.execute({ from: '2026-11-26', to: '2026-11-26' }, {})
+assert.equal(afterDelete.events.length, 0, 'the deleted event is gone from the list')
+
+const again = del.execute({ ids: [created.created[0].id] }, {})
+assert.equal(again.deleted.length, 0, 'deleting an unknown id reports nothing removed, without throwing')
+
 await rm(home, { recursive: true, force: true })
-console.log('tools: registration OK (schema subset, execute, approval gate, truncation)')
+console.log('tools: registration OK (three tools, schema subset, list ids, delete, approval gate, truncation)')
