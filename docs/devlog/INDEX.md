@@ -7,6 +7,7 @@
 
 | 日期 | 版本 | 主题 | 日志 |
 |---|---|---|---|
+| 2026-11-26 | 2.0.0 | v2.0.0 release and payload cleanup | [2026-11-26-v2.0.0-release-and-payload-cleanup.md](2026-11-26-v2.0.0-release-and-payload-cleanup.md) |
 | 2026-11-26 | 1.3.1 | v1.3.1 merge complete into update | [2026-11-26-v1.3.1-merge-complete-into-update.md](2026-11-26-v1.3.1-merge-complete-into-update.md) |
 | 2026-11-26 | 1.3.0 | v1.3.0 手动完成与提醒三档 | [2026-11-26-v1.3.0-manual-done-and-reminder-tiers.md](2026-11-26-v1.3.0-manual-done-and-reminder-tiers.md) |
 | 2026-11-26 | — | 建立日志与交接体系（AGENTS.md / state / devlog / ADR / docs:check） | [2026-11-26-docs-logging-system.md](2026-11-26-docs-logging-system.md) |

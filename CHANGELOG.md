@@ -4,6 +4,31 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [2.0.0] — 2026-11-26
+
+The first release the author calls stable: the v1.3 line (three reminder
+tiers, manual completion, model-side update) plus a package that ships only
+what the host and the browser actually load.
+
+### Changed
+
+- **The published tarball is the plugin itself: six files.** `files` now lists
+  `lib/index.js`, `lib/client.js`, `cordis.patch.yml`, `icon.svg` and `LICENSE`,
+  and `npm run release` packs from a staging directory (`scripts/stage.mjs`)
+  because npm always adds `README.md`/`LICENSE` next to `package.json` no matter
+  what `files` says. The shipped tarball is `package.json` plus those five
+  files; documentation, `AGENTS.md`, tests, scripts, sources and caches stay in
+  the repository and never reach the profile.
+- `LICENSE` stays on purpose: MIT requires the notice to travel with the
+  software.
+
+### Removed
+
+- Development leftovers from the repository tree: extracted copies of the DSH
+  packages and the host/client API cheat-sheets under `.research*/`, the
+  pre-work profile backups under `.backups/`, the one-off parsing and debugging
+  scripts under `.tmp/`, and the superseded release tarballs in `dist/`.
+
 ## [1.3.1] — 2026-11-26
 
 ### Changed

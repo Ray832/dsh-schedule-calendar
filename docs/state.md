@@ -3,7 +3,7 @@
 > 这是**覆盖式**更新的现状快照，不是历史。历史在 `docs/devlog/`，设计理由在 `docs/decisions/`。
 > 每个会话开始读这一页就够开工；改动完成后必须回来更新它。
 
-- 当前版本：**1.3.1**
+- 当前版本：**2.0.0**
 - 最后更新：2026-11-26（Asia/Shanghai）
 - 状态：**可发布、可用**。宿主与客户端都已在本机 DSH 加载并实测通过。
 - 一句话：给 DSH 加日历 + 三档提醒 + 课表 + 长期规划，并让模型经审批读写日程、标记完成。
@@ -20,6 +20,11 @@
 | Client | `lib/client.cjs`（CJS + `window.__ModuleLoader__`） | 浏览器 / 渲染进程 | 只能从冻结模块表取 React 18；语言走 `ctx.locale` |
 
 装配：`package.json` 的 `dsh.bundle.patch` → `cordis.patch.yml` → `- insert: [{id: schedule-calendar, name: dsh-schedule-calendar}]`。
+
+**安装包只含运行时**，正好 6 个条目：`package.json` + `lib/index.js`、`lib/client.js`、
+`cordis.patch.yml`、`icon.svg`、`LICENSE`。注意 npm **强行**打包 README，所以发布走
+`scripts/stage.mjs` 暂存到 `.pack/` 再 `npm pack .pack`；直接 `npm pack` 会带上 README。
+后果是插件库/详情页看不到 README（ADR 0010）。
 
 宿主 API 全走 HTTP：`ctx.webServer.register({kind:'prefix', path:'/api/dsh-calendar'})`，
 信封 `{ok:true,value}` / `{ok:false,error:{code,message}}`，业务错误也返回 HTTP 200，
@@ -51,7 +56,8 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 `Timetable`（最大，513 行）· `Plan` · `Settings` · `QuickAdd` · `NoticeHost`（完成/关闭/稍后提醒）·
 `i18n.ts`（179 条词条）· `api.ts` · `dates.ts` · `csv.ts` · `io.ts` · `css.ts` · `Icon.tsx`。
 
-配套：`scripts/wrap.mjs`（给 client bundle 套 loader 壳）、`scripts/doctor.mjs`（11 项自检）、
+配套：`scripts/wrap.mjs`（给 client bundle 套 loader 壳）、`scripts/stage.mjs`（暂存发布包）、
+`scripts/doctor.mjs`（11 项自检）、
 `scripts/docs-check.mjs`（交接文档一致性）、`scripts/log.mjs`（日志骨架）、
 `scripts/gh-token.ps1`（从 Windows 凭据库取推送 token）、
 `tests/` 七个套件（smoke/tools/notify/repeat/**remind**/client/i18n）。
@@ -98,6 +104,9 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 - v1.1.0 — 模型可在任意 session 经审批写入日程（`calendar_add` / `calendar_list`）。
 - v1.2.0 — `calendar_delete`；`calendar_list` 返回 id 并明确"何时该调用"。
 - 2026-11-26 — 建立日志/交接体系（本文件、`AGENTS.md`、`docs/devlog/`、`docs/decisions/`、`docs:check`）。
+- v2.0.0 — **正式版**：内容等于 v1.3.1 的功能集；安装包只带运行时五个文件
+  （`lib/index.js`、`lib/client.js`、`cordis.patch.yml`、`icon.svg`、`LICENSE`），
+  README/CHANGELOG/AGENTS/docs/tests 都不进 profile（ADR 0010）；仓库里清掉了调研与调试中间产物。
 - v1.3.1 — `calendar_complete` 并入 `calendar_update`（`done` 字段），工具回到四个；审批与结果文案对"只改完成"仍显示标记完成/取消完成。
 - v1.3.0 — 提醒改为**三档**（短期时分 / 中期 1-15 天 / 长期每 1/3/5/7 天）；
   日程可**手动标记完成**（议程勾选 + 编辑器开关），完成的事件不再提醒；
@@ -153,7 +162,7 @@ npm run typecheck                 # tsc --noEmit
 npm test                          # 6 套：smoke/tools/notify/repeat/client/i18n
 npm run doctor                    # 11 项环境与包结构自检
 npm run docs:check                # 状态/日志/索引一致性
-npm run release                   # build + test + pack 到 dist/
+npm run release                   # build + test + stage + pack 到 dist/（只含运行时 6 个文件）
 ```
 
 注意：本机 `npm run build` 里的 esbuild 会 EPERM，需要按 `AGENTS.md` §3 直接调二进制。
@@ -169,5 +178,6 @@ npm run release                   # build + test + pack 到 dist/
 | `docs/devlog/INDEX.md` | 历史索引，先看表再决定读哪篇 |
 | `docs/decisions/` | ADR：为什么这样设计 |
 | `CHANGELOG.md` | 用户可感知的变化 |
+| `docs/structure.md` | 项目导览：每个文件/文件夹是什么、哪些会进安装包 |
 | `README.md` / `README.zh.md` | 安装与使用 |
 | `docs/usage.md` / `docs/usage.zh.md` | 详细用法 |

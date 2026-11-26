@@ -15,6 +15,7 @@
 | [0007](0007-reminder-tiers.md) | 提醒用三档表达，分钟数组只是派生 | Accepted |
 | [0008](0008-one-tool-per-intent.md) | 一个意图一个工具：新增 update / complete，不改造 add | Superseded by 0009 |
 | [0009](0009-completion-in-update.md) | 完成状态并入 `calendar_update`，工具回到四个 | Accepted |
+| [0010](0010-runtime-only-package.md) | 发布包只装插件本体（5 个文件 + package.json） | Accepted |
 
 ## 什么时候该写一条
 
