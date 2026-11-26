@@ -155,6 +155,14 @@ UI 占三个 slot：`sidebar.panellist`（入口）、`main`（面板本体）�
 
 ---
 
+## 7.5 本机安装形态（2026-11-26 起）
+
+- profile 里 `node_modules/dsh-schedule-calendar` 是**真实目录**，内容等于发布包（6 个文件，244 KB），
+  不再是 `link:E:\Dsh_Schedule` 的 junction。
+- profile `package.json` 的依赖声明是 `file:E:/Dsh_Schedule/dist/dsh-schedule-calendar-2.0.0.tgz`。
+- 发布新版本后要把 `dist/*.tgz` 换掉并重装这一项，否则 profile 仍是旧版。
+- **不要**再为了图省事建 junction 指回仓库：那样会把 `src/`、`tests/`、`.git`、`node_modules` 全带进 profile。
+
 ## 8. 怎么验证
 
 ```bash
